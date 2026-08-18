@@ -14,6 +14,33 @@ Default home (overridable with `VAULT_HOME`):
 
 `connect_provider` in a capability returns a loopback URL. The secret is posted in the browser. Tool results are masked status only.
 
+## Grants
+
+A grant is a row: capability `weather` may use connection `purpleair:default`.
+Rows live in `grants.json` next to `connections.json` in the vault home.
+
+- **Local default:** `VAULT_GRANT_MODE=auto` (or unset). The OS user may use any
+  connection. No extra permission prompt on a laptop. `getSecretFor` succeeds
+  without a row.
+- **Explicit:** `VAULT_GRANT_MODE=explicit` requires `putGrant` before
+  `getSecretFor`. Use this for hosted-like tests.
+
+Capability manifests (`capability.json` at each app's package root) live
+**in each app**, not here. A new capability must not require a vault release.
+Parse them with `parseCapabilityManifest`; map a connected provider/slot to a
+grant with `grantFromManifest`. `putGrant` does not require the connection to
+exist yet; grant rows are inert until `getSecretFor` consults them. Fetchers
+should call `getSecretFor(capability, connectionId)`; status/CLI may still call
+`getSecret`.
+
+The full contract a new app must implement — manifest schema, naming rules,
+vault usage, grant modes, MCP conventions, acceptance checklist — is in
+[CAPABILITY.md](CAPABILITY.md).
+
+The **broker** that attaches keys only to allowlisted hosts, and a hosted
+**data-store** for public / user / private data, are later packages. See
+[FUTURE.md](FUTURE.md).
+
 ## Local vs hosted
 
 Same tools, two runtimes. Do not fork handlers.

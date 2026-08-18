@@ -9,3 +9,7 @@ export class LoopbackError extends VaultError {
 export class KeychainError extends VaultError {
   override readonly name = "KeychainError";
 }
+
+export class GrantError extends VaultError {
+  override readonly name = "GrantError";
+}
