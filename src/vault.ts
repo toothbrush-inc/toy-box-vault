@@ -1,16 +1,23 @@
 import { mkdirSync } from "node:fs";
 
 import { FileConnectionStore, connectionsPath } from "./connections.js";
-import { VaultError } from "./errors.js";
+import { GrantError, VaultError } from "./errors.js";
 import { FileSecretStore, secretsPath } from "./file-secrets.js";
+import { FileGrantStore, grantsPath } from "./grants.js";
 import { resolveVaultHome } from "./home.js";
 import { KeychainSecretStore } from "./keychain.js";
 import {
   connectionId,
+  grantId,
   maskSecret,
+  type CheckGrantInput,
   type ConnectionRecord,
   type ConnectionStore,
   type ConnectionView,
+  type GrantMode,
+  type GrantRecord,
+  type GrantStore,
+  type PutGrantInput,
   type PutSecretInput,
   type SecretStore,
 } from "./types.js";
@@ -22,6 +29,8 @@ export interface OpenVaultOptions {
   env?: NodeJS.ProcessEnv;
   secrets?: SecretStore;
   connections?: ConnectionStore;
+  grants?: GrantStore;
+  grantMode?: GrantMode;
   backend?: SecretBackend;
   platform?: NodeJS.Platform;
   now?: () => Date;
@@ -32,6 +41,8 @@ export class Vault {
     readonly home: string,
     private readonly secrets: SecretStore,
     private readonly connections: ConnectionStore,
+    private readonly grants: GrantStore,
+    readonly grantMode: GrantMode,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -57,6 +68,55 @@ export class Vault {
   async getSecret(id: string): Promise<string | null> {
     const record = this.connections.get(id);
     return this.secrets.get(record?.secretRef ?? id);
+  }
+
+  async getSecretFor(capability: string, id: string, action?: string): Promise<string | null> {
+    const check: CheckGrantInput = { capability, connectionId: id };
+    if (action !== undefined) {
+      check.action = action;
+    }
+    if (!this.checkGrant(check)) {
+      throw new GrantError(`capability ${capability} is not granted ${id}`);
+    }
+    return this.getSecret(id);
+  }
+
+  checkGrant(input: CheckGrantInput): boolean {
+    if (this.grantMode === "auto") {
+      return true;
+    }
+    const record = this.grants.get(grantId(input.capability, input.connectionId));
+    if (record === null) {
+      return false;
+    }
+    if (input.action === undefined || record.actions.length === 0) {
+      return true;
+    }
+    return record.actions.includes(input.action);
+  }
+
+  putGrant(input: PutGrantInput): GrantRecord {
+    const timestamp = iso(input.now ?? this.now());
+    const id = grantId(input.capability, input.connectionId);
+    const existing = this.grants.get(id);
+    const record: GrantRecord = {
+      id,
+      capability: input.capability.trim().toLowerCase(),
+      connectionId: input.connectionId.trim().toLowerCase(),
+      actions: [...(input.actions ?? [])],
+      createdAt: existing?.createdAt ?? timestamp,
+      updatedAt: timestamp,
+    };
+    this.grants.put(record);
+    return record;
+  }
+
+  listGrants(capability?: string): GrantRecord[] {
+    return this.grants.list(capability);
+  }
+
+  revokeGrant(capability: string, connectionIdValue: string): boolean {
+    return this.grants.delete(grantId(capability, connectionIdValue));
   }
 
   async putSecret(input: PutSecretInput): Promise<ConnectionRecord> {
@@ -87,6 +147,7 @@ export class Vault {
     const record = this.connections.get(id);
     const secretDeleted = await this.secrets.delete(record?.secretRef ?? id);
     const recordDeleted = this.connections.delete(id);
+    this.grants.deleteForConnection(id);
     return secretDeleted || recordDeleted;
   }
 }
@@ -97,7 +158,9 @@ export function openVault(options: OpenVaultOptions = {}): Vault {
   mkdirSync(home, { recursive: true, mode: 0o700 });
   const secrets = options.secrets ?? createSecretStore(home, options, env);
   const connections = options.connections ?? new FileConnectionStore(connectionsPath(home));
-  return new Vault(home, secrets, connections, options.now);
+  const grants = options.grants ?? new FileGrantStore(grantsPath(home));
+  const grantMode = options.grantMode ?? grantModeFrom(env);
+  return new Vault(home, secrets, connections, grants, grantMode, options.now);
 }
 
 function createSecretStore(
@@ -114,6 +177,14 @@ function createSecretStore(
     keychainOptions.platform = options.platform;
   }
   return new KeychainSecretStore(keychainOptions);
+}
+
+function grantModeFrom(env: NodeJS.ProcessEnv): GrantMode {
+  const configured = env["VAULT_GRANT_MODE"];
+  if (configured === "explicit" || configured === "auto") {
+    return configured;
+  }
+  return "auto";
 }
 
 function secretBackendFrom(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): SecretBackend {

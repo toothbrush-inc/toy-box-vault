@@ -9,11 +9,14 @@ import {
   connectionId,
   DEFAULT_VAULT_HOME,
   defaultVaultHome,
+  GrantError,
+  grantFromManifest,
   KeychainError,
   KeychainSecretStore,
   LoopbackServer,
   maskSecret,
   openVault,
+  parseCapabilityManifest,
   resolveVaultHome,
   type CommandRunner,
 } from "../src/index.js";
@@ -255,8 +258,137 @@ describe("ApiKeyLoopback", () => {
   });
 });
 
-function fileVault() {
+describe("grants", () => {
+  it("auto-grants getSecretFor so a laptop needs no extra rows", async () => {
+    const vault = fileVault();
+    await vault.putSecret({
+      provider: "purpleair",
+      slot: "default",
+      kind: "apikey",
+      secret: "pa-secret",
+    });
+
+    await expect(vault.getSecretFor("weather", "purpleair:default")).resolves.toBe("pa-secret");
+    expect(vault.checkGrant({ capability: "weather", connectionId: "purpleair:default" })).toBe(true);
+    expect(vault.listGrants()).toEqual([]);
+  });
+
+  it("explicit mode requires a grant row before getSecretFor", async () => {
+    const vault = fileVault("explicit");
+    await vault.putSecret({
+      provider: "purpleair",
+      slot: "default",
+      kind: "apikey",
+      secret: "pa-secret",
+    });
+
+    await expect(vault.getSecretFor("weather", "purpleair:default")).rejects.toBeInstanceOf(GrantError);
+    expect(vault.checkGrant({ capability: "weather", connectionId: "purpleair:default" })).toBe(false);
+
+    vault.putGrant({
+      capability: "weather",
+      connectionId: "purpleair:default",
+      actions: ["read"],
+      now: new Date("2026-08-18T20:00:00.000Z"),
+    });
+
+    await expect(vault.getSecretFor("weather", "purpleair:default", "read")).resolves.toBe("pa-secret");
+    expect(vault.checkGrant({ capability: "weather", connectionId: "purpleair:default", action: "write" })).toBe(
+      false,
+    );
+    expect(vault.listGrants("weather")).toMatchObject([
+      { id: "weather:purpleair:default", capability: "weather", connectionId: "purpleair:default", actions: ["read"] },
+    ]);
+  });
+
+  it("revoke of a connection deletes its grant rows", async () => {
+    const vault = fileVault("explicit");
+    await vault.putSecret({
+      provider: "google",
+      slot: "personal",
+      kind: "oauth",
+      secret: "1//refresh",
+    });
+    vault.putGrant({ capability: "calsync", connectionId: "google:personal" });
+    vault.putGrant({ capability: "weather", connectionId: "purpleair:default" });
+
+    await vault.revoke("google:personal");
+    expect(vault.listGrants("calsync")).toEqual([]);
+    expect(vault.listGrants("weather")).toMatchObject([{ connectionId: "purpleair:default" }]);
+  });
+});
+
+describe("parseCapabilityManifest", () => {
+  it("normalizes a capability's connection needs", () => {
+    expect(
+      parseCapabilityManifest({
+        id: "Weather",
+        connections: [
+          { provider: "PurpleAir", slot: "Default", optional: true, actions: ["read"] },
+          { provider: "open_meteo", slot: "default", optional: true },
+        ],
+      }),
+    ).toEqual({
+      id: "weather",
+      connections: [
+        { provider: "purpleair", slot: "default", optional: true, actions: ["read"] },
+        { provider: "open_meteo", slot: "default", optional: true },
+      ],
+    });
+  });
+
+  it("rejects a malformed manifest", () => {
+    expect(() => parseCapabilityManifest({ id: "weather" })).toThrow(/connections must be an array/);
+  });
+
+  it("maps a declared connection need to a grant input", () => {
+    const manifest = parseCapabilityManifest({
+      id: "weather",
+      connections: [
+        { provider: "purpleair", slot: "default", optional: true, actions: ["read"] },
+        { provider: "open_meteo", slot: "default", optional: true },
+      ],
+    });
+
+    expect(grantFromManifest(manifest, "purpleair", "default")).toEqual({
+      capability: "weather",
+      connectionId: "purpleair:default",
+      actions: ["read"],
+    });
+    expect(grantFromManifest(manifest, "open_meteo", "default")).toEqual({
+      capability: "weather",
+      connectionId: "open_meteo:default",
+    });
+    expect(() => grantFromManifest(manifest, "google", "personal")).toThrow(
+      /does not declare connection google:personal/,
+    );
+  });
+
+  it("registers grants that satisfy explicit-mode getSecretFor", async () => {
+    const vault = fileVault("explicit");
+    await vault.putSecret({
+      provider: "purpleair",
+      slot: "default",
+      kind: "apikey",
+      secret: "pa-secret",
+    });
+    const manifest = parseCapabilityManifest({
+      id: "weather",
+      connections: [{ provider: "purpleair", slot: "default", optional: true, actions: ["read"] }],
+    });
+
+    vault.putGrant(grantFromManifest(manifest, "purpleair", "default"));
+
+    await expect(vault.getSecretFor("weather", "purpleair:default", "read")).resolves.toBe("pa-secret");
+  });
+});
+
+function fileVault(grantMode?: "auto" | "explicit") {
   const home = mkdtempSync(join(tmpdir(), "vault-"));
   homes.push(home);
-  return openVault({ home, backend: "file" });
+  const options: { home: string; backend: "file"; grantMode?: "auto" | "explicit" } = { home, backend: "file" };
+  if (grantMode !== undefined) {
+    options.grantMode = grantMode;
+  }
+  return openVault(options);
 }

@@ -51,10 +51,63 @@ export interface ConnectionStore {
   delete(id: string): boolean;
 }
 
+export type GrantMode = "auto" | "explicit";
+
+export interface GrantRecord {
+  id: string;
+  capability: string;
+  connectionId: string;
+  actions: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PutGrantInput {
+  capability: string;
+  connectionId: string;
+  actions?: readonly string[];
+  now?: Date;
+}
+
+export interface CheckGrantInput {
+  capability: string;
+  connectionId: string;
+  action?: string;
+}
+
+export interface GrantStore {
+  get(id: string): GrantRecord | null;
+  list(capability?: string): GrantRecord[];
+  put(record: GrantRecord): void;
+  delete(id: string): boolean;
+  deleteForConnection(connectionId: string): number;
+}
+
+export interface ManifestConnectionNeed {
+  provider: string;
+  slot: string;
+  optional: boolean;
+  actions?: string[];
+}
+
+export interface CapabilityManifest {
+  id: string;
+  connections: ManifestConnectionNeed[];
+}
+
 export function connectionId(provider: string, slot: string): string {
   const normalizedProvider = requireToken(provider, "provider");
   const normalizedSlot = requireToken(slot, "slot");
   return `${normalizedProvider}:${normalizedSlot}`;
+}
+
+export function grantId(capability: string, connectionIdValue: string): string {
+  const normalizedCapability = requireToken(capability, "capability");
+  const trimmed = connectionIdValue.trim().toLowerCase();
+  if (trimmed.length === 0) {
+    throw new Error("connectionId is required");
+  }
+  return `${normalizedCapability}:${trimmed}`;
 }
 
 export function maskSecret(value: string): string {
