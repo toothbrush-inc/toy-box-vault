@@ -175,10 +175,76 @@ broker-only (both).
 ## 7. Standalone rule
 
 A capability must run with only `@local/vault` and its own repo — no gateway,
-no sibling capability, no platform service. The broker that enforces grants on
-every call and attaches secrets only to allowlisted hosts is a later, separate
-package ([FUTURE.md](FUTURE.md)); until it exists, fetchers read the secret
-in-process after `getSecretFor`.
+no sibling capability, no platform service. The
+[capability gateway](https://github.com/davidd8/capability-gateway) is strictly
+additive: it composes capabilities, enforces grants and egress, and audits —
+but a capability that *requires* it does not conform.
+
+## 8. Delivering and deploying a capability
+
+What an app developer ships, and how users run it.
+
+### The deliverable
+
+- **One repo, npm-installable.** `npm install github:you/your-capability` must
+  produce a runnable package (use a `prepare` script if you build TypeScript).
+  Depend on `@local/vault` via `package.json` — never a relative sibling path.
+- **`capability.json` at the package root** (§1), including `egress` specs
+  (§6) for every credentialed provider.
+- **A stdio MCP entrypoint** — a `bin` or a documented
+  `node <path>` command. stdout is the MCP wire; all diagnostics go to stderr.
+  This entrypoint is the unit both Claude/Cursor configs and the gateway spawn.
+- **A README** covering: which connections the capability needs and how a user
+  obtains keys/accounts; the `connect_provider` flow; the tool list; any
+  background jobs (schedulers, launchd) and how to install them; and the two
+  deployment shapes below.
+
+### The three run modes (all mandatory)
+
+| Mode | Trigger | Secret access |
+|---|---|---|
+| Standalone | no egress env | `getSecretFor` in-process; local attach per manifest |
+| Brokered | `VAULT_EGRESS_URL`/`VAULT_EGRESS_TOKEN` present | `brokeredGet` / `brokeredToken`; no key in-process |
+| Broker-only | + `VAULT_SECRETS_ACCESS=broker` | fetch-path reads throw; broker is the only path |
+
+Route every credentialed request through **one choke-point helper** that picks
+the mode (weather-compare's `lib/provider-http.mjs` and calsync's
+`TokenExchange` wiring are the reference implementations). Presence checks use
+`status()`-based helpers, never fetch-path reads. Never require users to set
+any `VAULT_*` variable by hand — the platform injects them.
+
+### How users deploy it
+
+**Standalone** (an MCP client config):
+
+```json
+{ "mcpServers": { "yourapp": { "command": "node", "args": ["mcp/server.mjs"], "cwd": "/path/to/yourapp" } } }
+```
+
+**Under the gateway** (recommended; one entry in `gateway.config.json`):
+
+```json
+{
+  "id": "yourapp",
+  "command": "node",
+  "args": ["mcp/server.mjs"],
+  "cwd": "/path/to/yourapp",
+  "manifestPath": "/path/to/yourapp/capability.json",
+  "secretsAccess": "broker"
+}
+```
+
+Declare `secretsAccess: "broker"` once your fetch paths are broker-clean. If
+the capability uses an OAuth provider, document what the gateway's `oauth`
+block needs (e.g. which env file holds the client id/secret). Tool names are
+the agent-facing API and arrive prefixed (`yourapp__<tool>`).
+
+### Compatibility expectations
+
+- The capability `id` is forever: grants and audit history are keyed by it.
+- Tool names and result shapes are the public API — additive changes only.
+- Track `@local/vault` minor versions; the barrel at the bottom of this doc is
+  the full API you may rely on.
 
 ## Acceptance checklist
 
@@ -207,9 +273,17 @@ A new capability conforms when all of these hold:
       capability or gateway checked out.
 - [ ] Optional connections stay optional: the capability starts and reports
       status with zero connections configured.
+- [ ] All three run modes work (§8): standalone, brokered (egress env), and
+      broker-only (`VAULT_SECRETS_ACCESS=broker`) — asserted by tests using a
+      fake broker; under broker-only, no fetch path reads a secret.
+- [ ] Delivery: `npm install github:you/your-capability` yields a runnable
+      stdio MCP entrypoint, and the README documents connections, tools,
+      background jobs, and both deployment shapes.
 
 Everything referenced here is exported from the `@local/vault` barrel:
 `openVault`, `connectionId`, `grantId`, `maskSecret`, `parseCapabilityManifest`,
-`grantFromManifest`, `LoopbackServer`, `ApiKeyLoopback`, `GrantError`, and the
-types (`CapabilityManifest`, `ManifestConnectionNeed`, `PutGrantInput`,
-`GrantRecord`, `ConnectionView`).
+`grantFromManifest`, `LoopbackServer`, `ApiKeyLoopback`, `egressFromEnv`,
+`brokeredGet`, `brokeredToken`, `GrantError`, `EgressRequiredError`, and the
+types (`CapabilityManifest`, `ManifestConnectionNeed`, `ManifestEgressSpec`,
+`PutGrantInput`, `GrantRecord`, `ConnectionView`, `EgressEndpoint`,
+`BrokeredResponse`, `BrokeredToken`, `SecretsAccess`).
