@@ -37,7 +37,10 @@ The full contract a new app must implement — manifest schema, naming rules,
 vault usage, grant modes, MCP conventions, acceptance checklist — is in
 [CAPABILITY.md](CAPABILITY.md).
 
-The **broker** that attaches keys only to allowlisted hosts, and a hosted
+A gateway MVP that mounts capabilities behind one MCP endpoint with
+explicit-mode grants, tool policy, and an audit log lives at
+[davidd8/capability-gateway](https://github.com/davidd8/capability-gateway).
+The full **broker** that attaches keys only to allowlisted hosts, and a hosted
 **data-store** for public / user / private data, are later packages. See
 [FUTURE.md](FUTURE.md).
 
