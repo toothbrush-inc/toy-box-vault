@@ -37,12 +37,14 @@ The full contract a new app must implement — manifest schema, naming rules,
 vault usage, grant modes, MCP conventions, acceptance checklist — is in
 [CAPABILITY.md](CAPABILITY.md).
 
-A gateway MVP that mounts capabilities behind one MCP endpoint with
-explicit-mode grants, tool policy, and an audit log lives at
+A gateway that mounts capabilities behind one MCP endpoint with explicit-mode
+grants, tool policy, an audit log, and a **brokered egress** service (keys
+attached only to allowlisted hosts; Google token exchange) lives at
 [davidd8/capability-gateway](https://github.com/davidd8/capability-gateway).
-The full **broker** that attaches keys only to allowlisted hosts, and a hosted
-**data-store** for public / user / private data, are later packages. See
-[FUTURE.md](FUTURE.md).
+This package ships the client side: declare `egress` in your manifest, read
+the endpoint with `egressFromEnv`, and route credentialed fetches through
+`brokeredGet` — see [CAPABILITY.md](CAPABILITY.md) §6. A hosted **data-store**
+for public / user / private data is a later package. See [FUTURE.md](FUTURE.md).
 
 ## Local vs hosted
 

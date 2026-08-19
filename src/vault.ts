@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 
 import { FileConnectionStore, connectionsPath } from "./connections.js";
-import { GrantError, VaultError } from "./errors.js";
+import { EgressRequiredError, GrantError, VaultError } from "./errors.js";
 import { FileSecretStore, secretsPath } from "./file-secrets.js";
 import { FileGrantStore, grantsPath } from "./grants.js";
 import { resolveVaultHome } from "./home.js";
@@ -19,6 +19,7 @@ import {
   type GrantStore,
   type PutGrantInput,
   type PutSecretInput,
+  type SecretsAccess,
   type SecretStore,
 } from "./types.js";
 
@@ -31,6 +32,7 @@ export interface OpenVaultOptions {
   connections?: ConnectionStore;
   grants?: GrantStore;
   grantMode?: GrantMode;
+  secretsAccess?: SecretsAccess;
   backend?: SecretBackend;
   platform?: NodeJS.Platform;
   now?: () => Date;
@@ -43,6 +45,7 @@ export class Vault {
     private readonly connections: ConnectionStore,
     private readonly grants: GrantStore,
     readonly grantMode: GrantMode,
+    readonly secretsAccess: SecretsAccess = "direct",
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -71,6 +74,11 @@ export class Vault {
   }
 
   async getSecretFor(capability: string, id: string, action?: string): Promise<string | null> {
+    if (this.secretsAccess === "broker") {
+      throw new EgressRequiredError(
+        "fetch-path secret reads are broker-only in this process; route the request through brokered egress",
+      );
+    }
     const check: CheckGrantInput = { capability, connectionId: id };
     if (action !== undefined) {
       check.action = action;
@@ -160,7 +168,8 @@ export function openVault(options: OpenVaultOptions = {}): Vault {
   const connections = options.connections ?? new FileConnectionStore(connectionsPath(home));
   const grants = options.grants ?? new FileGrantStore(grantsPath(home));
   const grantMode = options.grantMode ?? grantModeFrom(env);
-  return new Vault(home, secrets, connections, grants, grantMode, options.now);
+  const secretsAccess = options.secretsAccess ?? secretsAccessFrom(env);
+  return new Vault(home, secrets, connections, grants, grantMode, secretsAccess, options.now);
 }
 
 function createSecretStore(
@@ -177,6 +186,10 @@ function createSecretStore(
     keychainOptions.platform = options.platform;
   }
   return new KeychainSecretStore(keychainOptions);
+}
+
+function secretsAccessFrom(env: NodeJS.ProcessEnv): SecretsAccess {
+  return env["VAULT_SECRETS_ACCESS"] === "broker" ? "broker" : "direct";
 }
 
 function grantModeFrom(env: NodeJS.ProcessEnv): GrantMode {

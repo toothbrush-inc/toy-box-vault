@@ -1,6 +1,13 @@
 export { FileConnectionStore, connectionsPath } from "./connections.js";
 export { FileGrantStore, grantsPath } from "./grants.js";
-export { GrantError, KeychainError, LoopbackError, VaultError } from "./errors.js";
+export { EgressRequiredError, GrantError, KeychainError, LoopbackError, VaultError } from "./errors.js";
+export {
+  brokeredGet,
+  egressFromEnv,
+  type BrokeredRequest,
+  type BrokeredResponse,
+  type EgressEndpoint,
+} from "./egress.js";
 export { FileSecretStore, secretsPath } from "./file-secrets.js";
 export {
   DEFAULT_KEYCHAIN_SERVICE,
@@ -36,9 +43,12 @@ export {
   type GrantRecord,
   type GrantStore,
   type ManifestConnectionNeed,
+  type ManifestEgressAttach,
+  type ManifestEgressSpec,
   type PutGrantInput,
   type PutSecretInput,
   type SecretOrigin,
+  type SecretsAccess,
   type SecretStore,
 } from "./types.js";
 export { openVault, Vault, type OpenVaultOptions, type SecretBackend } from "./vault.js";

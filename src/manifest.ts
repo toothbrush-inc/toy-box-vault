@@ -2,6 +2,7 @@ import {
   connectionId,
   type CapabilityManifest,
   type ManifestConnectionNeed,
+  type ManifestEgressSpec,
   type PutGrantInput,
 } from "./types.js";
 
@@ -25,6 +26,7 @@ export function parseCapabilityManifest(value: unknown): CapabilityManifest {
       slot?: unknown;
       optional?: unknown;
       actions?: unknown;
+      egress?: unknown;
     };
     if (typeof need.provider !== "string" || need.provider.trim() === "") {
       throw new Error(`capability manifest connections[${String(index)}].provider is required`);
@@ -46,9 +48,67 @@ export function parseCapabilityManifest(value: unknown): CapabilityManifest {
       }
       parsed.actions = need.actions.map((action) => action.trim()).filter(Boolean);
     }
+    if (need.egress !== undefined) {
+      parsed.egress = parseEgress(need.egress, index);
+    }
     return parsed;
   });
   return { id: record.id.trim().toLowerCase(), connections };
+}
+
+function parseEgress(value: unknown, index: number): ManifestEgressSpec {
+  const label = `capability manifest connections[${String(index)}].egress`;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  const spec = value as { hosts?: unknown; attach?: unknown; hostRewrite?: unknown };
+  if (!Array.isArray(spec.hosts) || spec.hosts.length === 0) {
+    throw new Error(`${label}.hosts must be a non-empty array`);
+  }
+  const hosts = spec.hosts.map((host) => requireHostname(host, `${label}.hosts`));
+  if (typeof spec.attach !== "object" || spec.attach === null || Array.isArray(spec.attach)) {
+    throw new Error(`${label}.attach must be an object`);
+  }
+  const attach = spec.attach as { kind?: unknown; name?: unknown };
+  if (attach.kind !== "header" && attach.kind !== "query") {
+    throw new Error(`${label}.attach.kind must be "header" or "query"`);
+  }
+  if (typeof attach.name !== "string" || attach.name.trim() === "") {
+    throw new Error(`${label}.attach.name is required`);
+  }
+  const parsed: ManifestEgressSpec = {
+    hosts,
+    attach: { kind: attach.kind, name: attach.name.trim() },
+  };
+  if (spec.hostRewrite !== undefined) {
+    if (
+      typeof spec.hostRewrite !== "object" ||
+      spec.hostRewrite === null ||
+      Array.isArray(spec.hostRewrite)
+    ) {
+      throw new Error(`${label}.hostRewrite must be an object`);
+    }
+    const rewrite: Record<string, string> = {};
+    for (const [from, to] of Object.entries(spec.hostRewrite)) {
+      rewrite[requireHostname(from, `${label}.hostRewrite`)] = requireHostname(
+        to,
+        `${label}.hostRewrite`,
+      );
+    }
+    parsed.hostRewrite = rewrite;
+  }
+  return parsed;
+}
+
+function requireHostname(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`${label} entries must be non-empty strings`);
+  }
+  const host = value.trim().toLowerCase();
+  if (/[/:\s]/u.test(host)) {
+    throw new Error(`${label} entries must be bare hostnames (no scheme, port, or path)`);
+  }
+  return host;
 }
 
 export function grantFromManifest(

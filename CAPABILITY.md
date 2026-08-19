@@ -128,7 +128,51 @@ Expose the capability as a **stdio** MCP server (`@modelcontextprotocol/sdk`):
 - Optional but encouraged: a `request_capability` gap tool that records what
   users asked for and couldn't have (weather `lib/gaps.mjs`).
 
-## 6. Standalone rule
+## 6. Brokered egress
+
+When a capability runs under a gateway/broker, credentialed requests can be
+routed through it so the capability never touches the raw secret. The contract:
+
+**Manifest**: a connection that needs credentialed egress declares it:
+
+```json
+"egress": {
+  "hosts": ["api.purpleair.com"],
+  "attach": { "kind": "header", "name": "X-API-Key" },
+  "hostRewrite": { "api.open-meteo.com": "customer-api.open-meteo.com" }
+}
+```
+
+- `hosts` — bare hostnames the capability may *request* (public hosts; no
+  scheme, port, or path). Allowlisting is host-level because some APIs (NWS)
+  return follow-up URLs in response bodies.
+- `attach` — how the broker adds the credential: a `header` or a `query`
+  parameter with the given name.
+- `hostRewrite` (optional) — public→keyed host map the broker applies only
+  when a credential exists (the Open-Meteo customer-host pattern). The
+  capability always builds and persists PUBLIC urls.
+
+**Environment**: the broker hands children `VAULT_EGRESS_URL` and
+`VAULT_EGRESS_TOKEN`. Read them with `egressFromEnv(env)`; when present, route
+credentialed fetches with `brokeredGet(egress, {provider, slot, url,
+headers})`. It returns `{status, contentType, body}` — upstream non-2xx comes
+back as data — and throws only for broker-level failures, always with a
+`.code`: `egress_unauthorized`, `egress_bad_request`, `egress_denied`
+(undeclared provider), `grant_missing`, `egress_host_denied`,
+`egress_method_not_allowed`, `upstream_unreachable`, `egress_unreachable`,
+`egress_error`. The client is generic: the capability owns JSON parsing and
+its own error wording (map `grant_missing` to your reconnect hint).
+
+**Broker-only mode**: `VAULT_SECRETS_ACCESS=broker` (set by the gateway, not
+by capabilities) makes `getSecretFor` throw `EgressRequiredError` so a fetch
+path that bypasses the broker fails loudly. `getSecret`/`status` (masked
+display, presence checks) keep working. This is cooperative on one machine —
+the hosted platform enforces the same rule with sandboxing — so a conforming
+capability must work in all three modes: standalone (no egress env, reads via
+`getSecretFor`), brokered (egress env present, fetches via `brokeredGet`), and
+broker-only (both).
+
+## 7. Standalone rule
 
 A capability must run with only `@local/vault` and its own repo — no gateway,
 no sibling capability, no platform service. The broker that enforces grants on
