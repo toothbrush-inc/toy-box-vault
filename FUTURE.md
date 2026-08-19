@@ -17,13 +17,19 @@ Not in this repo yet:
 - Audit log, rate limits, revoke one app without wiping the connection
 - Install / grant UI (hosted identity + permission screen)
 
-An MVP now exists at
+The broker now exists at
 [davidd8/capability-gateway](https://github.com/davidd8/capability-gateway):
 one process mounting capability MCP servers with explicit-mode grants, tool
-policy, and an audit log. Host-allowlisted egress and rate limits remain
-future — fetchers still read the secret in-process after `getSecretFor`. Local
-default remains `VAULT_GRANT_MODE=auto` (OS user, no extra prompt). Standalone
-stdio MCP stays the OSS unit; weather must not require CalSync or a gateway.
+policy, an audit log, and **brokered egress** — API keys attached only to
+manifest-allowlisted hosts (weather is fully migrated and never touches its
+keys under the gateway), plus Google OAuth token exchange (the broker holds
+the refresh token; capabilities get short-lived access tokens). Still future:
+calsync's internal adoption of `/token` (a BrokeredAuthClient for googleapis —
+until then calsync reads its refresh token in-process under explicit grants),
+rate limits, and OS sandboxing (local enforcement is cooperative via
+`VAULT_SECRETS_ACCESS=broker`). Local default remains `VAULT_GRANT_MODE=auto`
+(OS user, no extra prompt). Standalone stdio MCP stays the OSS unit; weather
+must not require CalSync or a gateway.
 
 ## Hosted data-store package
 
