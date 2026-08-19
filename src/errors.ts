@@ -13,3 +13,7 @@ export class KeychainError extends VaultError {
 export class GrantError extends VaultError {
   override readonly name = "GrantError";
 }
+
+export class EgressRequiredError extends VaultError {
+  override readonly name = "EgressRequiredError";
+}

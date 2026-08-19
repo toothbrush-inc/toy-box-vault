@@ -83,12 +83,28 @@ export interface GrantStore {
   deleteForConnection(connectionId: string): number;
 }
 
+export interface ManifestEgressAttach {
+  kind: "header" | "query";
+  name: string;
+}
+
+export interface ManifestEgressSpec {
+  /** Hostnames the capability may request (public hosts; no scheme/port/path). */
+  hosts: string[];
+  attach: ManifestEgressAttach;
+  /** Applied broker-side only when a credential exists (public host -> keyed host). */
+  hostRewrite?: Record<string, string>;
+}
+
 export interface ManifestConnectionNeed {
   provider: string;
   slot: string;
   optional: boolean;
   actions?: string[];
+  egress?: ManifestEgressSpec;
 }
+
+export type SecretsAccess = "direct" | "broker";
 
 export interface CapabilityManifest {
   id: string;

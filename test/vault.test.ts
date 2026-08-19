@@ -1,4 +1,6 @@
 import { mkdtempSync, rmSync } from "node:fs";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -6,9 +8,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   ApiKeyLoopback,
+  brokeredGet,
   connectionId,
   DEFAULT_VAULT_HOME,
   defaultVaultHome,
+  egressFromEnv,
+  EgressRequiredError,
   GrantError,
   grantFromManifest,
   KeychainError,
@@ -364,6 +369,60 @@ describe("parseCapabilityManifest", () => {
     );
   });
 
+  it("parses egress specs and rejects malformed ones", () => {
+    const manifest = parseCapabilityManifest({
+      id: "weather",
+      connections: [
+        {
+          provider: "purpleair",
+          slot: "default",
+          optional: true,
+          egress: { hosts: ["Api.PurpleAir.com"], attach: { kind: "header", name: "X-API-Key" } },
+        },
+        {
+          provider: "open_meteo",
+          slot: "default",
+          optional: true,
+          egress: {
+            hosts: ["api.open-meteo.com"],
+            attach: { kind: "query", name: "apikey" },
+            hostRewrite: { "api.open-meteo.com": "customer-api.open-meteo.com" },
+          },
+        },
+      ],
+    });
+    expect(manifest.connections[0]?.egress).toEqual({
+      hosts: ["api.purpleair.com"],
+      attach: { kind: "header", name: "X-API-Key" },
+    });
+    expect(manifest.connections[1]?.egress?.hostRewrite).toEqual({
+      "api.open-meteo.com": "customer-api.open-meteo.com",
+    });
+
+    const base = { provider: "p", slot: "default", optional: true };
+    const withEgress = (egress: unknown) => ({ id: "x", connections: [{ ...base, egress }] });
+    expect(() => parseCapabilityManifest(withEgress({ hosts: [], attach: { kind: "header", name: "K" } }))).toThrow(
+      /hosts must be a non-empty array/,
+    );
+    expect(() =>
+      parseCapabilityManifest(withEgress({ hosts: ["https://a.com"], attach: { kind: "header", name: "K" } })),
+    ).toThrow(/bare hostnames/);
+    expect(() =>
+      parseCapabilityManifest(withEgress({ hosts: ["a.com"], attach: { kind: "cookie", name: "K" } })),
+    ).toThrow(/attach.kind/);
+    expect(() =>
+      parseCapabilityManifest(withEgress({ hosts: ["a.com"], attach: { kind: "header", name: " " } })),
+    ).toThrow(/attach.name/);
+  });
+
+  it("keeps manifests without egress backward compatible", () => {
+    const manifest = parseCapabilityManifest({
+      id: "calsync",
+      connections: [{ provider: "google", slot: "personal", optional: false }],
+    });
+    expect(manifest.connections[0]).not.toHaveProperty("egress");
+  });
+
   it("registers grants that satisfy explicit-mode getSecretFor", async () => {
     const vault = fileVault("explicit");
     await vault.putSecret({
@@ -382,6 +441,109 @@ describe("parseCapabilityManifest", () => {
     await expect(vault.getSecretFor("weather", "purpleair:default", "read")).resolves.toBe("pa-secret");
   });
 });
+
+describe("brokered egress client", () => {
+  it("reads the endpoint from env, requiring both variables", () => {
+    expect(egressFromEnv({})).toBeNull();
+    expect(egressFromEnv({ VAULT_EGRESS_URL: "http://127.0.0.1:1" })).toBeNull();
+    expect(
+      egressFromEnv({ VAULT_EGRESS_URL: "http://127.0.0.1:1", VAULT_EGRESS_TOKEN: "t" }),
+    ).toEqual({ url: "http://127.0.0.1:1", token: "t" });
+  });
+
+  it("returns broker 2xx replies as data, including upstream failures", async () => {
+    const { url, close } = await fakeBroker((body) => ({
+      status: 200,
+      payload: { ok: true, status: 502, contentType: "text/plain", body: `echo:${body.url}` },
+    }));
+    try {
+      const result = await brokeredGet(
+        { url, token: "tok" },
+        { provider: "purpleair", url: "https://api.purpleair.com/v1/sensors/1" },
+      );
+      expect(result).toEqual({
+        status: 502,
+        contentType: "text/plain",
+        body: "echo:https://api.purpleair.com/v1/sensors/1",
+      });
+    } finally {
+      await close();
+    }
+  });
+
+  it("throws coded errors for broker denials and unreachable brokers", async () => {
+    const { url, close } = await fakeBroker(() => ({
+      status: 403,
+      payload: { ok: false, error: { code: "grant_missing", message: "no grant" } },
+    }));
+    try {
+      const denial = await brokeredGet(
+        { url, token: "tok" },
+        { provider: "purpleair", url: "https://api.purpleair.com/x" },
+      ).then(
+        () => null,
+        (error: Error & { code?: string }) => error,
+      );
+      expect(denial?.code).toBe("grant_missing");
+      expect(denial?.message).toBe("no grant");
+    } finally {
+      await close();
+    }
+
+    const unreachable = await brokeredGet(
+      { url: "http://127.0.0.1:9", token: "tok" },
+      { provider: "purpleair", url: "https://api.purpleair.com/x" },
+    ).then(
+      () => null,
+      (error: Error & { code?: string }) => error,
+    );
+    expect(unreachable?.code).toBe("egress_unreachable");
+  });
+});
+
+describe("broker-only secrets access", () => {
+  it("blocks fetch-path reads but keeps status and display reads working", async () => {
+    const home = mkdtempSync(join(tmpdir(), "vault-"));
+    homes.push(home);
+    const direct = openVault({ home, backend: "file" });
+    await direct.putSecret({ provider: "purpleair", slot: "default", kind: "apikey", secret: "pa-key" });
+
+    const brokered = openVault({ home, backend: "file", env: { VAULT_SECRETS_ACCESS: "broker" } });
+    expect(brokered.secretsAccess).toBe("broker");
+    await expect(brokered.getSecretFor("weather", "purpleair:default")).rejects.toBeInstanceOf(
+      EgressRequiredError,
+    );
+    await expect(brokered.getSecret("purpleair:default")).resolves.toBe("pa-key");
+    await expect(brokered.status("purpleair:default")).resolves.toMatchObject({ set: true });
+
+    expect(direct.secretsAccess).toBe("direct");
+    await expect(direct.getSecretFor("weather", "purpleair:default")).resolves.toBe("pa-key");
+  });
+});
+
+async function fakeBroker(
+  handle: (body: { provider: string; slot: string; url: string }) => {
+    status: number;
+    payload: unknown;
+  },
+): Promise<{ url: string; close: () => Promise<void> }> {
+  const server: Server = createServer((request, response) => {
+    let raw = "";
+    request.on("data", (chunk: Buffer) => (raw += chunk.toString("utf8")));
+    request.on("end", () => {
+      const body = JSON.parse(raw) as { provider: string; slot: string; url: string };
+      const { status, payload } = handle(body);
+      response.writeHead(status, { "Content-Type": "application/json" });
+      response.end(JSON.stringify(payload));
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  return {
+    url: `http://127.0.0.1:${String(address.port)}`,
+    close: () => new Promise((resolve) => server.close(() => resolve())),
+  };
+}
 
 function fileVault(grantMode?: "auto" | "explicit") {
   const home = mkdtempSync(join(tmpdir(), "vault-"));
