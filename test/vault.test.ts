@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ApiKeyLoopback,
   brokeredGet,
+  brokeredToken,
   connectionId,
   DEFAULT_VAULT_HOME,
   defaultVaultHome,
@@ -498,6 +499,38 @@ describe("brokered egress client", () => {
       (error: Error & { code?: string }) => error,
     );
     expect(unreachable?.code).toBe("egress_unreachable");
+  });
+
+  it("exchanges tokens via the broker and throws coded errors on denial", async () => {
+    const ok = await fakeBroker(() => ({
+      status: 200,
+      payload: { ok: true, access_token: "ya29.short", expires_at: "2026-08-19T22:00:00.000Z" },
+    }));
+    try {
+      await expect(
+        brokeredToken({ url: ok.url, token: "tok" }, { provider: "google", slot: "personal" }),
+      ).resolves.toEqual({ accessToken: "ya29.short", expiresAt: "2026-08-19T22:00:00.000Z" });
+    } finally {
+      await ok.close();
+    }
+
+    const revoked = await fakeBroker(() => ({
+      status: 403,
+      payload: { ok: false, error: { code: "token_revoked", message: "re-run connect" } },
+    }));
+    try {
+      const denial = await brokeredToken(
+        { url: revoked.url, token: "tok" },
+        { provider: "google", slot: "personal" },
+      ).then(
+        () => null,
+        (error: Error & { code?: string }) => error,
+      );
+      expect(denial?.code).toBe("token_revoked");
+      expect(denial?.message).toBe("re-run connect");
+    } finally {
+      await revoked.close();
+    }
   });
 });
 

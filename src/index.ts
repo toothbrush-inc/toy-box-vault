@@ -3,9 +3,12 @@ export { FileGrantStore, grantsPath } from "./grants.js";
 export { EgressRequiredError, GrantError, KeychainError, LoopbackError, VaultError } from "./errors.js";
 export {
   brokeredGet,
+  brokeredToken,
   egressFromEnv,
   type BrokeredRequest,
   type BrokeredResponse,
+  type BrokeredToken,
+  type BrokeredTokenRequest,
   type EgressEndpoint,
 } from "./egress.js";
 export { FileSecretStore, secretsPath } from "./file-secrets.js";

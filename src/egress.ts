@@ -93,6 +93,67 @@ export async function brokeredGet(
   };
 }
 
+export interface BrokeredTokenRequest {
+  provider: string;
+  slot?: string;
+}
+
+export interface BrokeredToken {
+  accessToken: string;
+  expiresAt: string;
+}
+
+/**
+ * Exchanges a broker-held refresh token for a short-lived access token via
+ * POST /token. The durable credential never enters this process. Thrown
+ * errors always carry a `.code` (broker codes like grant_missing /
+ * not_connected / token_revoked / oauth_not_configured, or
+ * "egress_unreachable" / "egress_error").
+ */
+export async function brokeredToken(
+  egress: EgressEndpoint,
+  request: BrokeredTokenRequest,
+): Promise<BrokeredToken> {
+  let response: Response;
+  try {
+    response = await fetch(`${egress.url}/token`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${egress.token}`,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+      body: JSON.stringify({ provider: request.provider, slot: request.slot ?? "default" }),
+    });
+  } catch (error) {
+    throw withCode(
+      new Error(`egress broker unreachable at ${egress.url}`, { cause: error }),
+      "egress_unreachable",
+    );
+  }
+  const text = await response.text();
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    payload = null;
+  }
+  if (!response.ok) {
+    const error = (payload as { error?: { code?: unknown; message?: unknown } } | null)?.error;
+    const code = typeof error?.code === "string" ? error.code : "egress_error";
+    const message =
+      typeof error?.message === "string"
+        ? error.message
+        : `egress broker rejected the token exchange (HTTP ${String(response.status)})`;
+    throw withCode(new Error(message), code);
+  }
+  const ok = payload as { access_token?: unknown; expires_at?: unknown } | null;
+  if (ok === null || typeof ok.access_token !== "string" || typeof ok.expires_at !== "string") {
+    throw withCode(new Error("egress broker returned a malformed token response"), "egress_error");
+  }
+  return { accessToken: ok.access_token, expiresAt: ok.expires_at };
+}
+
 function withCode(error: Error, code: string): Error {
   (error as Error & { code: string }).code = code;
   return error;
