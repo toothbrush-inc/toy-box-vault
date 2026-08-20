@@ -154,6 +154,98 @@ export async function brokeredToken(
   return { accessToken: ok.access_token, expiresAt: ok.expires_at };
 }
 
+export interface BrokeredProfileRequest {
+  fields: readonly string[];
+}
+
+/**
+ * Grant-gated profile read through the broker (POST /profile). Returns only
+ * fields that are granted AND set. Coded errors: grant_missing (message lists
+ * the denied fields), egress_denied, egress_unreachable, egress_error.
+ */
+export async function brokeredProfile(
+  egress: EgressEndpoint,
+  request: BrokeredProfileRequest,
+): Promise<Record<string, string>> {
+  const payload = await postJson(egress, "/profile", { fields: [...request.fields] });
+  const fields = (payload as { fields?: unknown }).fields;
+  if (typeof fields !== "object" || fields === null || Array.isArray(fields)) {
+    throw withCode(new Error("egress broker returned a malformed profile response"), "egress_error");
+  }
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (typeof value === "string") {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+export interface BrokeredCommonsRequest {
+  dataset: string;
+  key?: string;
+}
+
+/**
+ * Public-read commons dataset through the broker (POST /commons). Coded
+ * errors: egress_denied (undeclared dataset), commons_not_configured,
+ * commons_not_found, commons_key_not_found, commons_error, egress_unreachable.
+ */
+export async function brokeredCommons(
+  egress: EgressEndpoint,
+  request: BrokeredCommonsRequest,
+): Promise<unknown> {
+  const payload = await postJson(egress, "/commons", {
+    dataset: request.dataset,
+    ...(request.key === undefined ? {} : { key: request.key }),
+  });
+  return (payload as { data?: unknown }).data;
+}
+
+async function postJson(
+  egress: EgressEndpoint,
+  path: string,
+  body: unknown,
+): Promise<unknown> {
+  let response: Response;
+  try {
+    response = await fetch(`${egress.url}${path}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${egress.token}`,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    throw withCode(
+      new Error(`egress broker unreachable at ${egress.url}`, { cause: error }),
+      "egress_unreachable",
+    );
+  }
+  const text = await response.text();
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    payload = null;
+  }
+  if (!response.ok) {
+    const error = (payload as { error?: { code?: unknown; message?: unknown } } | null)?.error;
+    const code = typeof error?.code === "string" ? error.code : "egress_error";
+    const message =
+      typeof error?.message === "string"
+        ? error.message
+        : `egress broker rejected the request (HTTP ${String(response.status)})`;
+    throw withCode(new Error(message), code);
+  }
+  if (payload === null || typeof payload !== "object") {
+    throw withCode(new Error("egress broker returned a malformed response"), "egress_error");
+  }
+  return payload;
+}
+
 function withCode(error: Error, code: string): Error {
   (error as Error & { code: string }).code = code;
   return error;

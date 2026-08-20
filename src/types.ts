@@ -106,9 +106,25 @@ export interface ManifestConnectionNeed {
 
 export type SecretsAccess = "direct" | "broker";
 
+export interface ManifestPrivateData {
+  name: string;
+  description?: string;
+}
+
+export interface ManifestCommonsData {
+  dataset: string;
+  description?: string;
+}
+
+export interface ManifestData {
+  private?: ManifestPrivateData[];
+  commons?: ManifestCommonsData[];
+}
+
 export interface CapabilityManifest {
   id: string;
   connections: ManifestConnectionNeed[];
+  data?: ManifestData;
 }
 
 export function connectionId(provider: string, slot: string): string {

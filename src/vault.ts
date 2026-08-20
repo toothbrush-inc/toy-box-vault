@@ -1,10 +1,20 @@
 import { mkdirSync } from "node:fs";
 
 import { FileConnectionStore, connectionsPath } from "./connections.js";
-import { EgressRequiredError, GrantError, VaultError } from "./errors.js";
+import { EgressRequiredError, GrantError, ProfileBoundsError, VaultError } from "./errors.js";
 import { FileSecretStore, secretsPath } from "./file-secrets.js";
 import { FileGrantStore, grantsPath } from "./grants.js";
 import { resolveVaultHome } from "./home.js";
+import {
+  FileProfileStore,
+  PROFILE_CONNECTION_ID,
+  PROFILE_MAX_FIELD_LENGTH,
+  PROFILE_MAX_FIELDS,
+  PROFILE_MAX_FILE_BYTES,
+  PROFILE_MAX_VALUE_LENGTH,
+  profilePath,
+  type ProfileStore,
+} from "./profile.js";
 import { KeychainSecretStore } from "./keychain.js";
 import {
   connectionId,
@@ -31,6 +41,7 @@ export interface OpenVaultOptions {
   secrets?: SecretStore;
   connections?: ConnectionStore;
   grants?: GrantStore;
+  profile?: ProfileStore;
   grantMode?: GrantMode;
   secretsAccess?: SecretsAccess;
   backend?: SecretBackend;
@@ -44,6 +55,7 @@ export class Vault {
     private readonly secrets: SecretStore,
     private readonly connections: ConnectionStore,
     private readonly grants: GrantStore,
+    private readonly profile: ProfileStore,
     readonly grantMode: GrantMode,
     readonly secretsAccess: SecretsAccess = "direct",
     private readonly now: () => Date = () => new Date(),
@@ -151,6 +163,93 @@ export class Vault {
     return record;
   }
 
+  /**
+   * Grant-gated per-field profile read for a capability's fetch path.
+   * Returns only requested fields that are set; absence means not-configured
+   * (the capability applies its own defaults). Profile data always survives
+   * grant revocation — access dies, data stays.
+   */
+  async getProfileFor(
+    capability: string,
+    fields: readonly string[],
+  ): Promise<Record<string, string>> {
+    if (this.secretsAccess === "broker") {
+      throw new EgressRequiredError(
+        "profile reads are broker-only in this process; route the request through brokered egress",
+      );
+    }
+    for (const field of fields) {
+      const check: CheckGrantInput = {
+        capability,
+        connectionId: PROFILE_CONNECTION_ID,
+        action: field,
+      };
+      if (!this.checkGrant(check)) {
+        throw new GrantError(
+          `capability ${capability} is not granted profile field '${field}' (grant ${PROFILE_CONNECTION_ID} with that action)`,
+        );
+      }
+    }
+    const stored = this.profile.read();
+    const out: Record<string, string> = {};
+    for (const field of fields) {
+      const value = stored[field];
+      if (value !== undefined) {
+        out[field] = value;
+      }
+    }
+    return Promise.resolve(out);
+  }
+
+  /** Owner-side merge upsert; ungated. Enforces the not-a-data-lake bounds. */
+  putProfile(fields: Record<string, string>): Record<string, string> {
+    const merged = { ...this.profile.read() };
+    for (const [rawField, rawValue] of Object.entries(fields)) {
+      const field = requireProfileField(rawField);
+      const value = rawValue.trim();
+      if (value === "") {
+        throw new VaultError(`profile field '${field}' must not be empty (delete it instead)`);
+      }
+      if (value.length > PROFILE_MAX_VALUE_LENGTH) {
+        throw new ProfileBoundsError(
+          `profile value for '${field}' exceeds ${String(PROFILE_MAX_VALUE_LENGTH)} characters`,
+        );
+      }
+      merged[field] = value;
+    }
+    if (Object.keys(merged).length > PROFILE_MAX_FIELDS) {
+      throw new ProfileBoundsError(
+        `profile is limited to ${String(PROFILE_MAX_FIELDS)} fields; it must not grow into a data lake`,
+      );
+    }
+    if (JSON.stringify({ fields: merged }).length > PROFILE_MAX_FILE_BYTES) {
+      throw new ProfileBoundsError(
+        `profile is limited to ${String(PROFILE_MAX_FILE_BYTES)} bytes; it must not grow into a data lake`,
+      );
+    }
+    this.profile.write(merged);
+    return merged;
+  }
+
+  /** Owner-side field removal; ungated. */
+  deleteProfileField(field: string): boolean {
+    const stored = this.profile.read();
+    const normalized = requireProfileField(field);
+    if (stored[normalized] === undefined) {
+      return false;
+    }
+    const rest = Object.fromEntries(
+      Object.entries(stored).filter(([key]) => key !== normalized),
+    );
+    this.profile.write(rest);
+    return true;
+  }
+
+  /** Owner-side full read for status/CLI display. Profile values are not secrets. */
+  getProfile(): Record<string, string> {
+    return this.profile.read();
+  }
+
   async revoke(id: string): Promise<boolean> {
     const record = this.connections.get(id);
     const secretDeleted = await this.secrets.delete(record?.secretRef ?? id);
@@ -167,9 +266,20 @@ export function openVault(options: OpenVaultOptions = {}): Vault {
   const secrets = options.secrets ?? createSecretStore(home, options, env);
   const connections = options.connections ?? new FileConnectionStore(connectionsPath(home));
   const grants = options.grants ?? new FileGrantStore(grantsPath(home));
+  const profile = options.profile ?? new FileProfileStore(profilePath(home));
   const grantMode = options.grantMode ?? grantModeFrom(env);
   const secretsAccess = options.secretsAccess ?? secretsAccessFrom(env);
-  return new Vault(home, secrets, connections, grants, grantMode, secretsAccess, options.now);
+  return new Vault(home, secrets, connections, grants, profile, grantMode, secretsAccess, options.now);
+}
+
+function requireProfileField(value: string): string {
+  const trimmed = value.trim().toLowerCase();
+  if (trimmed === "" || trimmed.length > PROFILE_MAX_FIELD_LENGTH || !/^[a-z][a-z0-9_-]*$/u.test(trimmed)) {
+    throw new VaultError(
+      `'${value}' is not a valid profile field name (lowercase token, max ${String(PROFILE_MAX_FIELD_LENGTH)} chars)`,
+    );
+  }
+  return trimmed;
 }
 
 function createSecretStore(
