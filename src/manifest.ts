@@ -71,9 +71,29 @@ function parseData(value: unknown): ManifestData {
     if (!Array.isArray(record.private)) {
       throw new Error("capability manifest data.private must be an array");
     }
-    data.private = record.private.map((entry, index) =>
-      parseDataEntry(entry, "name", `data.private[${String(index)}]`),
-    );
+    data.private = record.private.map((entry, index) => {
+      const label = `data.private[${String(index)}]`;
+      const parsed = parseDataEntry(entry, "name", label);
+      const extras = entry as { env?: unknown; file?: unknown };
+      const out: import("./types.js").ManifestPrivateData = parsed;
+      if (extras.env !== undefined) {
+        if (typeof extras.env !== "string" || !/^[A-Z][A-Z0-9_]*$/u.test(extras.env.trim())) {
+          throw new Error(`capability manifest ${label}.env must be an UPPER_SNAKE_CASE env var name`);
+        }
+        out.env = extras.env.trim();
+      }
+      if (extras.file !== undefined) {
+        if (
+          typeof extras.file !== "string" ||
+          extras.file.trim() === "" ||
+          /[/\\]/u.test(extras.file)
+        ) {
+          throw new Error(`capability manifest ${label}.file must be a bare filename`);
+        }
+        out.file = extras.file.trim();
+      }
+      return out;
+    });
   }
   if (record.commons !== undefined) {
     if (!Array.isArray(record.commons)) {
