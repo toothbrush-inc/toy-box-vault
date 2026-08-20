@@ -125,10 +125,17 @@ export interface ManifestData {
   commons?: ManifestCommonsData[];
 }
 
+export interface ManifestTools {
+  /** Side-effect-free tools safe to call on a read/refresh path (views bind
+   * only these; grant defaults may use them). */
+  query?: string[];
+}
+
 export interface CapabilityManifest {
   id: string;
   connections: ManifestConnectionNeed[];
   data?: ManifestData;
+  tools?: ManifestTools;
 }
 
 export function connectionId(provider: string, slot: string): string {

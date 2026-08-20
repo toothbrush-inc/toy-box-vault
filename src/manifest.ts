@@ -4,6 +4,7 @@ import {
   type ManifestConnectionNeed,
   type ManifestData,
   type ManifestEgressSpec,
+  type ManifestTools,
   type PutGrantInput,
 } from "./types.js";
 
@@ -11,7 +12,7 @@ export function parseCapabilityManifest(value: unknown): CapabilityManifest {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error("capability manifest must be an object");
   }
-  const record = value as { id?: unknown; connections?: unknown; data?: unknown };
+  const record = value as { id?: unknown; connections?: unknown; data?: unknown; tools?: unknown };
   if (typeof record.id !== "string" || record.id.trim() === "") {
     throw new Error("capability manifest id is required");
   }
@@ -58,7 +59,31 @@ export function parseCapabilityManifest(value: unknown): CapabilityManifest {
   if (record.data !== undefined) {
     manifest.data = parseData(record.data);
   }
+  if (record.tools !== undefined) {
+    manifest.tools = parseTools(record.tools);
+  }
   return manifest;
+}
+
+function parseTools(value: unknown): ManifestTools {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("capability manifest tools must be an object");
+  }
+  const record = value as { query?: unknown };
+  const tools: ManifestTools = {};
+  if (record.query !== undefined) {
+    if (!Array.isArray(record.query) || record.query.some((tool) => typeof tool !== "string")) {
+      throw new Error("capability manifest tools.query must be an array of tool names");
+    }
+    const names = record.query.map((tool) => tool.trim().toLowerCase()).filter(Boolean);
+    for (const name of names) {
+      if (!/^[a-z][a-z0-9_]*$/u.test(name)) {
+        throw new Error(`capability manifest tools.query entry '${name}' must be a tool name`);
+      }
+    }
+    tools.query = [...new Set(names)];
+  }
+  return tools;
 }
 
 function parseData(value: unknown): ManifestData {

@@ -174,6 +174,25 @@ describe("kit peerCall", () => {
   });
 });
 
+describe("manifest tools.query", () => {
+  it("parses, normalizes, dedupes, and rejects malformed names", () => {
+    const manifest = parseCapabilityManifest({
+      id: "fitness",
+      connections: [],
+      tools: { query: ["get_workout_stats", "Get_Workout_Stats", "get_status"] },
+    });
+    expect(manifest.tools?.query).toEqual(["get_workout_stats", "get_status"]);
+
+    expect(parseCapabilityManifest({ id: "x", connections: [] }).tools).toBeUndefined();
+    expect(() =>
+      parseCapabilityManifest({ id: "x", connections: [], tools: { query: ["bad-name"] } }),
+    ).toThrow(/tools.query entry/);
+    expect(() => parseCapabilityManifest({ id: "x", connections: [], tools: [] })).toThrow(
+      /tools must be an object/,
+    );
+  });
+});
+
 describe("manifest private ledger env/file", () => {
   it("parses env and file, rejecting malformed values", () => {
     const manifest = parseCapabilityManifest({
