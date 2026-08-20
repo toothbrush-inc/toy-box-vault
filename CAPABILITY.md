@@ -1,6 +1,8 @@
 # The capability contract
 
 What a new repo must implement to plug into the local capability platform.
+New here? Start with the tutorial — [GUIDE.md](GUIDE.md) — and return to this
+contract as the reference.
 
 A **capability** is a standalone app that connects to external services through
 the shared vault, declares which connections it needs, and exposes its features
