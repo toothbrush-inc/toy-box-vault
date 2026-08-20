@@ -87,3 +87,10 @@ Two design commitments that follow:
 **Sequencing.** Recommendation 1 (with version capture) before views — the views
 slice gets dramatically simpler if cards read through `/call` instead of growing
 a bespoke data plane. Recommendations 2–3 are severable and small.
+
+> **Update (2026-08-20):** Recommendation 1 shipped, with version capture —
+> vault v0.8.0 (`brokeredCall`, kit `peerCall`, CAPABILITY.md §10) and gateway
+> v0.6.0 (`POST /call`, mount-time versions in status and audit, provenance
+> stamping). E2E-proven: a consumer app read fitness stats through the broker
+> with grants, mid-session revocation, and value-free versioned audit rows.
+> Recommendations 2–3 remain open.
