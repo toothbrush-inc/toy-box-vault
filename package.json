@@ -1,6 +1,6 @@
 {
   "name": "@local/vault",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": false,
   "description": "Local connection vault: secrets, grants, loopback connect, masked status",
   "type": "module",
@@ -8,6 +8,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./kit": {
+      "types": "./dist/kit.d.ts",
+      "import": "./dist/kit.js"
     }
   },
   "main": "./dist/index.js",
