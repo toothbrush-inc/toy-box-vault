@@ -33,6 +33,13 @@ must not require CalSync or a gateway.
 
 ## Hosted data-store package
 
+The LOCAL semantics for all three classes now exist: private ledgers are a
+contract (CAPABILITY.md §9, per-capability `<ID>_DB` files, tools-only
+access), the user profile is a bounded grant-gated store in this package
+(`profile.json`, per-field grants riding `profile:default`), and commons is a
+gateway-served read-only dataset directory. What remains hosted is the sync
+machinery below.
+
 Hosted persistence is a separate package from the vault (connections + grants) and
 from each capability’s local ledger. One store, three classes of data:
 
