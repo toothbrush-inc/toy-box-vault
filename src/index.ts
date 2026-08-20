@@ -9,11 +9,14 @@ export {
   VaultError,
 } from "./errors.js";
 export {
+  brokeredCall,
   brokeredCommons,
   brokeredGet,
   brokeredProfile,
   brokeredToken,
   egressFromEnv,
+  type BrokeredCallRequest,
+  type BrokeredCallResult,
   type BrokeredCommonsRequest,
   type BrokeredProfileRequest,
   type BrokeredRequest,
@@ -21,7 +24,9 @@ export {
   type BrokeredToken,
   type BrokeredTokenRequest,
   type EgressEndpoint,
+  type PeerProvenance,
 } from "./egress.js";
+export { CAPABILITY_PROVIDER, capabilityConnectionId } from "./peer.js";
 export {
   FileProfileStore,
   PROFILE_CONNECTION_ID,

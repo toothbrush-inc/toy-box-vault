@@ -202,6 +202,65 @@ export async function brokeredCommons(
   return (payload as { data?: unknown }).data;
 }
 
+export interface BrokeredCallRequest {
+  /** Producer capability id (the peer being called). */
+  capability: string;
+  tool: string;
+  args?: Record<string, unknown>;
+}
+
+export interface PeerProvenance {
+  capability: string;
+  /** Producer's package.json version as read by the gateway at mount; null when unknown. */
+  version: string | null;
+  ts: string;
+}
+
+export interface BrokeredCallResult {
+  /** The producer tool's typed result payload, verbatim. */
+  result: unknown;
+  provenance: PeerProvenance;
+}
+
+/**
+ * Grant-gated call to another mounted capability's tool (POST /call). The
+ * broker checks the declaration + per-tool grant, routes to the producer
+ * child, and stamps provenance. Coded errors: grant_missing, egress_denied
+ * (undeclared peer/tool, policy-blocked, or self-call), call_not_mounted,
+ * call_busy, call_failed, egress_unreachable, egress_error.
+ */
+export async function brokeredCall(
+  egress: EgressEndpoint,
+  request: BrokeredCallRequest,
+): Promise<BrokeredCallResult> {
+  const payload = await postJson(egress, "/call", {
+    capability: request.capability,
+    tool: request.tool,
+    args: request.args ?? {},
+  });
+  const record = payload as { result?: unknown; provenance?: unknown };
+  const prov = record.provenance as
+    | { capability?: unknown; version?: unknown; ts?: unknown }
+    | null
+    | undefined;
+  if (
+    prov === null ||
+    prov === undefined ||
+    typeof prov.capability !== "string" ||
+    typeof prov.ts !== "string"
+  ) {
+    throw withCode(new Error("egress broker returned a malformed call response"), "egress_error");
+  }
+  return {
+    result: record.result,
+    provenance: {
+      capability: prov.capability,
+      version: typeof prov.version === "string" ? prov.version : null,
+      ts: prov.ts,
+    },
+  };
+}
+
 async function postJson(
   egress: EgressEndpoint,
   path: string,

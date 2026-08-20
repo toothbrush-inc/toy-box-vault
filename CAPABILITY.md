@@ -301,6 +301,39 @@ declared); standalone → a documented local fallback (a `COMMONS_DIR` env
 and/or a bundled copy). No grants — commons is public-read by definition — and
 the capability must keep working when the dataset is unavailable.
 
+## 10. Peer capability calls
+
+A capability may consume **another capability's data** — but only through the
+producer's tools, only under the gateway, and only with a grant. Declare the
+peer as a pseudo-connection whose `actions` enumerate the producer **tools**
+you may invoke:
+
+```json
+{ "provider": "capability", "slot": "fitness", "optional": true, "actions": ["get_workout_stats"] }
+```
+
+Like profile connections, `actions` are **mandatory** — an omitted array
+declares no tools — and an `egress` spec is never attached. Call with the kit:
+
+```js
+import { peerCall } from "@local/vault/kit";
+
+const stats = await peerCall("fitness", "get_workout_stats", { days: 7 });
+// stats.ok, stats.data (the producer envelope's data), stats.error?, stats.note?
+// stats.provenance? — {capability, version, ts}, stamped by the broker
+```
+
+`peerCall` never throws. Standalone there is no peer process to reach, so it
+returns `{ok: false, error: {code: "peer_unavailable"}}` — degrade gracefully,
+exactly as with an ungranted profile field. Under the gateway the broker
+verifies the declaration, checks the per-tool grant (users grant
+conversationally: *"grant coach access to fitness stats"* → `gateway_grant`),
+enforces the producer-side tool policy, routes to the mounted producer child,
+audits `call:<producer>__<tool>` with both capabilities' versions (never args
+or results), and stamps provenance. Self-calls are denied; a peer that isn't
+mounted fails with `call_not_mounted` — handle both as unavailability, not as
+errors to retry.
+
 ## Acceptance checklist
 
 A new capability conforms when all of these hold:
@@ -345,13 +378,17 @@ A new capability conforms when all of these hold:
       capability works when a dataset is unavailable.
 - [ ] Profile values never appear in logs or audit output — asserted by a
       test. Tool results may display them.
+- [ ] Every peer tool invoked is declared as an action on a
+      `capability:<producer>` connection; peer unavailability (standalone,
+      ungranted, producer unmounted) degrades gracefully, never a crash.
 
 Everything referenced here is exported from the `@local/vault` barrel:
 `openVault`, `connectionId`, `grantId`, `maskSecret`, `parseCapabilityManifest`,
 `grantFromManifest`, `LoopbackServer`, `ApiKeyLoopback`, `egressFromEnv`,
 `brokeredGet`, `brokeredToken`, `brokeredProfile`, `brokeredCommons`,
+`brokeredCall`, `capabilityConnectionId`, `CAPABILITY_PROVIDER`,
 `GrantError`, `EgressRequiredError`, `ProfileBoundsError`, the `PROFILE_*`
 constants, and the types (`CapabilityManifest`, `ManifestConnectionNeed`,
 `ManifestEgressSpec`, `ManifestData`, `PutGrantInput`, `GrantRecord`,
 `ConnectionView`, `EgressEndpoint`, `BrokeredResponse`, `BrokeredToken`,
-`SecretsAccess`, `ProfileStore`).
+`BrokeredCallResult`, `PeerProvenance`, `SecretsAccess`, `ProfileStore`).

@@ -8,8 +8,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   ApiKeyLoopback,
+  brokeredCall,
   brokeredGet,
   brokeredToken,
+  capabilityConnectionId,
   connectionId,
   DEFAULT_VAULT_HOME,
   defaultVaultHome,
@@ -713,6 +715,64 @@ describe("brokered egress client", () => {
       expect(denial?.message).toBe("re-run connect");
     } finally {
       await revoked.close();
+    }
+  });
+
+  it("calls peer capabilities via the broker with provenance, coded denials, malformed rejection", async () => {
+    expect(capabilityConnectionId("fitness")).toBe("capability:fitness");
+
+    const ok = await fakeBroker(() => ({
+      status: 200,
+      payload: {
+        ok: true,
+        result: { ok: true, data: { total: 3 } },
+        provenance: { capability: "fitness", version: "0.2.0", ts: "2026-08-20T12:00:00.000Z" },
+      },
+    }));
+    try {
+      const call = await brokeredCall(
+        { url: ok.url, token: "tok" },
+        { capability: "fitness", tool: "get_workout_stats", args: { days: 7 } },
+      );
+      expect(call.result).toEqual({ ok: true, data: { total: 3 } });
+      expect(call.provenance).toEqual({
+        capability: "fitness",
+        version: "0.2.0",
+        ts: "2026-08-20T12:00:00.000Z",
+      });
+    } finally {
+      await ok.close();
+    }
+
+    const denied = await fakeBroker(() => ({
+      status: 403,
+      payload: { ok: false, error: { code: "grant_missing", message: "capability:fitness" } },
+    }));
+    try {
+      const denial = await brokeredCall(
+        { url: denied.url, token: "tok" },
+        { capability: "fitness", tool: "get_workout_stats" },
+      ).then(
+        () => null,
+        (error: Error & { code?: string }) => error,
+      );
+      expect(denial?.code).toBe("grant_missing");
+    } finally {
+      await denied.close();
+    }
+
+    const malformed = await fakeBroker(() => ({ status: 200, payload: { ok: true, result: {} } }));
+    try {
+      const failure = await brokeredCall(
+        { url: malformed.url, token: "tok" },
+        { capability: "fitness", tool: "get_workout_stats" },
+      ).then(
+        () => null,
+        (error: Error & { code?: string }) => error,
+      );
+      expect(failure?.code).toBe("egress_error");
+    } finally {
+      await malformed.close();
     }
   });
 });

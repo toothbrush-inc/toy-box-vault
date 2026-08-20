@@ -7,7 +7,14 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { brokeredCommons, brokeredProfile, egressFromEnv } from "./egress.js";
+import {
+  brokeredCall,
+  brokeredCommons,
+  brokeredProfile,
+  egressFromEnv,
+  type BrokeredCallResult,
+  type PeerProvenance,
+} from "./egress.js";
 import { openVault } from "./vault.js";
 
 // ---------------------------------------------------------------- results --
@@ -125,6 +132,77 @@ export async function profileContext(
     return { values: { ...defaults }, source: "default" };
   }
   return { values: { ...defaults, ...got }, source: "profile" };
+}
+
+// ------------------------------------------------------------------ peers --
+
+export interface PeerCallResult {
+  ok: boolean;
+  /** The producer envelope's `data` on success (or its raw result if untyped). */
+  data?: unknown;
+  error?: { code: string; message: string };
+  provenance?: PeerProvenance;
+  note?: string;
+}
+
+/**
+ * Calls another capability's tool through the gateway broker. Declare the peer
+ * in your manifest ({provider: "capability", slot: "<producer>", actions:
+ * [tools...]}); the user grants it via gateway_grant. Never throws: standalone
+ * (no broker) and denials come back as {ok: false} with an actionable note —
+ * degrade gracefully, exactly like profileContext.
+ */
+export async function peerCall(
+  producer: string,
+  tool: string,
+  args: Record<string, unknown> = {},
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<PeerCallResult> {
+  const egress = egressFromEnv(env);
+  if (!egress) {
+    return {
+      ok: false,
+      error: {
+        code: "peer_unavailable",
+        message: `calls to ${producer} are only available under the gateway broker`,
+      },
+      note: `run under the gateway to call ${producer}; degrade gracefully standalone`,
+    };
+  }
+  let brokered: BrokeredCallResult;
+  try {
+    brokered = await brokeredCall(egress, { capability: producer, tool, args });
+  } catch (error) {
+    const code = (error as { code?: string }).code ?? "egress_error";
+    const out: PeerCallResult = {
+      ok: false,
+      error: {
+        code,
+        message: error instanceof Error ? error.message : String(error),
+      },
+    };
+    if (code === "grant_missing") {
+      out.note = `access to ${producer} is not granted; grant capability:${producer} to enable`;
+    }
+    return out;
+  }
+  const envelope = brokered.result as { ok?: unknown; data?: unknown; error?: unknown } | null;
+  if (envelope !== null && typeof envelope === "object" && envelope.ok === true) {
+    return { ok: true, data: envelope.data, provenance: brokered.provenance };
+  }
+  if (envelope !== null && typeof envelope === "object" && envelope.ok === false) {
+    const err = envelope.error as { code?: unknown; message?: unknown } | undefined;
+    return {
+      ok: false,
+      error: {
+        code: typeof err?.code === "string" ? err.code : "peer_error",
+        message:
+          typeof err?.message === "string" ? err.message : `call to ${producer}.${tool} failed`,
+      },
+      provenance: brokered.provenance,
+    };
+  }
+  return { ok: true, data: brokered.result, provenance: brokered.provenance };
 }
 
 // ---------------------------------------------------------------- commons --
