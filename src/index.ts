@@ -78,6 +78,7 @@ export {
   type ManifestEgressAttach,
   type ManifestEgressSpec,
   type ManifestPrivateData,
+  type ManifestTools,
   type PutGrantInput,
   type PutSecretInput,
   type SecretOrigin,

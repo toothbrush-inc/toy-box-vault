@@ -323,6 +323,17 @@ const stats = await peerCall("fitness", "get_workout_stats", { days: 7 });
 // stats.provenance? — {capability, version, ts}, stamped by the broker
 ```
 
+Producers opt into being consumed by annotating their **query tools** — the
+side-effect-free tools safe to call on a read/refresh path:
+
+```json
+"tools": { "query": ["get_workout_stats", "get_recent_workouts", "get_status"] }
+```
+
+Pinned views bind *only* query tools (a glance must never fire a mutation),
+and grant defaults may use the list. A tool that writes, sends, or deletes
+must never be annotated as a query tool.
+
 `peerCall` never throws. Standalone there is no peer process to reach, so it
 returns `{ok: false, error: {code: "peer_unavailable"}}` — degrade gracefully,
 exactly as with an ungranted profile field. Under the gateway the broker
