@@ -161,6 +161,11 @@ The user grants it conversationally: *"grant books access to fitness stats"*
 → `gateway_grant`. Every call is audited with both apps' versions; revoking
 cuts access mid-session.
 
+The flip side: annotate your **own** side-effect-free tools so others (and
+pinned dashboard views) can consume you —
+`"tools": { "query": ["list_entries", "get_status"] }`. Views bind only
+query tools; never annotate a tool that writes.
+
 ## Step 7 — mount it in the gateway
 
 One entry in `gateway.config.json`:

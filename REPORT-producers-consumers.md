@@ -93,4 +93,11 @@ a bespoke data plane. Recommendations 2–3 are severable and small.
 > v0.6.0 (`POST /call`, mount-time versions in status and audit, provenance
 > stamping). E2E-proven: a consumer app read fitness stats through the broker
 > with grants, mid-session revocation, and value-free versioned audit rows.
-> Recommendations 2–3 remain open.
+> Recommendation 2 (commons publish) remains open.
+>
+> **Update (2026-08-20, later):** Recommendation 3 shipped as manifest
+> `tools.query` (vault v0.9.0), and the **views system is built** on top of
+> `/call` (gateway v0.7.0): pinned compiled cards that read through the
+> peer-call machinery as grant-consumer `view-<id>`, bind only annotated
+> query tools, and carry per-query provenance. The "views: incomplete" row
+> above is now an **A** on the same mechanism as app consumers.
