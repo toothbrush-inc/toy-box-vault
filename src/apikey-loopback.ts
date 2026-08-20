@@ -23,6 +23,12 @@ export interface ApiKeyLoopbackOptions {
   timeoutMs?: number;
   now?: () => Date;
   state?: string;
+  /** Bind host; default 127.0.0.1. Use 0.0.0.0 behind a reverse proxy. */
+  host?: string;
+  /** Bind port; default 0 (ephemeral). */
+  port?: number;
+  /** When set, the advertised url uses `${publicBaseUrl}${path}?state=...`. */
+  publicBaseUrl?: string;
 }
 
 export class ApiKeyLoopback {
@@ -77,7 +83,7 @@ export class ApiKeyLoopback {
 
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
-      server.listen(0, "127.0.0.1", () => {
+      server.listen(options.port ?? 0, options.host ?? "127.0.0.1", () => {
         resolve();
       });
     });
@@ -87,8 +93,13 @@ export class ApiKeyLoopback {
       throw new LoopbackError("Unable to open a local connect port");
     }
 
+    const publicBase = options.publicBaseUrl?.trim().replace(/\/+$/u, "");
+    const origin =
+      publicBase !== undefined && publicBase !== ""
+        ? publicBase
+        : `http://127.0.0.1:${String(address.port)}`;
     const expiresAt = new Date(now().getTime() + timeoutMs);
-    const url = `http://127.0.0.1:${String(address.port)}${path}?state=${encodeURIComponent(state)}`;
+    const url = `${origin}${path}?state=${encodeURIComponent(state)}`;
     const loopback = new ApiKeyLoopback(server, url, expiresAt, state, captured, () => {
       resolveSecret(CANCELLED);
     });

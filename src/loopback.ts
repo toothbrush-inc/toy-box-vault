@@ -11,6 +11,12 @@ export interface LoopbackServerOptions {
   successText?: string;
   timeoutMs?: number;
   now?: () => Date;
+  /** Bind host; default 127.0.0.1. Use 0.0.0.0 behind a reverse proxy. */
+  host?: string;
+  /** Bind port; default 0 (ephemeral). Fixed ports enable pre-registered public callbacks. */
+  port?: number;
+  /** When set (e.g. https://gw.example.com), redirectUri advertises `${publicBaseUrl}${path}`. */
+  publicBaseUrl?: string;
 }
 
 export class LoopbackServer {
@@ -54,7 +60,7 @@ export class LoopbackServer {
 
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
-      server.listen(0, "127.0.0.1", () => {
+      server.listen(options.port ?? 0, options.host ?? "127.0.0.1", () => {
         resolve();
       });
     });
@@ -64,10 +70,15 @@ export class LoopbackServer {
       throw new LoopbackError("Unable to open a local callback port");
     }
 
+    const publicBase = options.publicBaseUrl?.trim().replace(/\/+$/u, "");
+    const redirectUri =
+      publicBase !== undefined && publicBase !== ""
+        ? `${publicBase}${path}`
+        : `http://127.0.0.1:${String(address.port)}${path}`;
     const expiresAt = new Date(now().getTime() + timeoutMs);
     const loopback = new LoopbackServer(
       server,
-      `http://127.0.0.1:${String(address.port)}${path}`,
+      redirectUri,
       expiresAt,
       Promise.race([captured, aborted]),
       settleAbort,
@@ -76,11 +87,12 @@ export class LoopbackServer {
       loopback.close(new LoopbackError("OAuth callback timed out"));
     }, timeoutMs);
     timer.unref();
-    void loopback.captured.catch(() => undefined);
-    void loopback.captured.finally(() => {
-      loopback.capturedSettled = true;
-      clearTimeout(timer);
-    });
+    void loopback.captured
+      .finally(() => {
+        loopback.capturedSettled = true;
+        clearTimeout(timer);
+      })
+      .catch(() => undefined);
     return loopback;
   }
 

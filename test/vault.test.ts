@@ -187,6 +187,39 @@ describe("LoopbackServer", () => {
     }
   });
 
+  it("advertises a public callback URL while still capturing on the local port", async () => {
+    const server = await LoopbackServer.start({
+      path: "/oauth2callback/personal",
+      publicBaseUrl: "https://gw.example.com/",
+      timeoutMs: 5_000,
+    });
+    try {
+      expect(server.redirectUri).toBe("https://gw.example.com/oauth2callback/personal");
+      const pending = server.waitForParams();
+      const address = (server as unknown as { server: { address(): { port: number } } }).server.address();
+      const response = await fetch(
+        `http://127.0.0.1:${String(address.port)}/oauth2callback/personal?code=pub-code`,
+      );
+      expect(response.ok).toBe(true);
+      expect((await pending).get("code")).toBe("pub-code");
+    } finally {
+      server.close();
+    }
+  });
+
+  it("binds a fixed port when asked", async () => {
+    const first = await LoopbackServer.start({ port: 0, timeoutMs: 5_000 });
+    const port = Number(new URL(first.redirectUri).port);
+    first.close();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const second = await LoopbackServer.start({ port, timeoutMs: 5_000 });
+    try {
+      expect(new URL(second.redirectUri).port).toBe(String(port));
+    } finally {
+      second.close();
+    }
+  });
+
   it("ignores requests to other paths so the callback can still complete", async () => {
     const server = await LoopbackServer.start({ path: "/oauth2callback", timeoutMs: 5_000 });
     try {
@@ -237,6 +270,21 @@ describe("ApiKeyLoopback", () => {
       expect(done).toContain("Connected");
       expect(done).not.toContain("super-secret-key");
       await expect(pending).resolves.toBe("super-secret-key");
+    } finally {
+      server.close();
+    }
+  });
+
+  it("advertises a public connect URL carrying the state", async () => {
+    const server = await ApiKeyLoopback.start({
+      page,
+      path: "/connect/purpleair",
+      publicBaseUrl: "https://gw.example.com",
+      state: "public-state",
+      timeoutMs: 5_000,
+    });
+    try {
+      expect(server.url).toBe("https://gw.example.com/connect/purpleair?state=public-state");
     } finally {
       server.close();
     }
