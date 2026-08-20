@@ -137,7 +137,31 @@ const catalog = await commonsDataset("isbn-catalog", {
 
 Keep working when `source` is `"none"`.
 
-## Step 6 — mount it in the gateway
+## Step 6 — consume another app's data (peer calls)
+
+Other apps' data is reachable only through *their* tools, with a grant.
+Declare the producer and the tools you need:
+
+```json
+"connections": [{ "provider": "capability", "slot": "fitness", "optional": true, "actions": ["get_workout_stats"] }]
+```
+
+Then one kit call — it never throws, and standalone (no gateway) it comes
+back `{ok: false}` so you degrade gracefully:
+
+```js
+import { peerCall } from "@local/vault/kit";
+
+const stats = await peerCall("fitness", "get_workout_stats", { days: 7 });
+// stats.ok, stats.data, stats.note?  (surface the note when !ok)
+// stats.provenance — {capability, version, ts}, stamped by the gateway
+```
+
+The user grants it conversationally: *"grant books access to fitness stats"*
+→ `gateway_grant`. Every call is audited with both apps' versions; revoking
+cuts access mid-session.
+
+## Step 7 — mount it in the gateway
 
 One entry in `gateway.config.json`:
 
@@ -153,7 +177,7 @@ gateway with `dataDir` configured provisions `<dataDir>/books/` and injects
 `BOOKS_DB` automatically — no env repetition in the config (an explicit
 `spec.env` still wins when you need it).
 
-## Step 7 — external APIs (only if you need credentials)
+## Step 8 — external APIs (only if you need credentials)
 
 If your app calls a keyed API, this is where the contract earns its length:
 manifest `egress` specs, `connect_provider`, `getSecretFor`/`brokeredGet`,
