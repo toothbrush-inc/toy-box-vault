@@ -2,6 +2,7 @@ import {
   connectionId,
   type CapabilityManifest,
   type ManifestConnectionNeed,
+  type ManifestData,
   type ManifestEgressSpec,
   type PutGrantInput,
 } from "./types.js";
@@ -10,7 +11,7 @@ export function parseCapabilityManifest(value: unknown): CapabilityManifest {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error("capability manifest must be an object");
   }
-  const record = value as { id?: unknown; connections?: unknown };
+  const record = value as { id?: unknown; connections?: unknown; data?: unknown };
   if (typeof record.id !== "string" || record.id.trim() === "") {
     throw new Error("capability manifest id is required");
   }
@@ -53,7 +54,67 @@ export function parseCapabilityManifest(value: unknown): CapabilityManifest {
     }
     return parsed;
   });
-  return { id: record.id.trim().toLowerCase(), connections };
+  const manifest: CapabilityManifest = { id: record.id.trim().toLowerCase(), connections };
+  if (record.data !== undefined) {
+    manifest.data = parseData(record.data);
+  }
+  return manifest;
+}
+
+function parseData(value: unknown): ManifestData {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("capability manifest data must be an object");
+  }
+  const record = value as { private?: unknown; commons?: unknown };
+  const data: ManifestData = {};
+  if (record.private !== undefined) {
+    if (!Array.isArray(record.private)) {
+      throw new Error("capability manifest data.private must be an array");
+    }
+    data.private = record.private.map((entry, index) =>
+      parseDataEntry(entry, "name", `data.private[${String(index)}]`),
+    );
+  }
+  if (record.commons !== undefined) {
+    if (!Array.isArray(record.commons)) {
+      throw new Error("capability manifest data.commons must be an array");
+    }
+    data.commons = record.commons.map((entry, index) => {
+      const parsed = parseDataEntry(entry, "dataset", `data.commons[${String(index)}]`);
+      return { dataset: parsed.name, ...(parsed.description === undefined ? {} : { description: parsed.description }) };
+    });
+  }
+  return data;
+}
+
+function parseDataEntry(
+  entry: unknown,
+  keyField: "name" | "dataset",
+  label: string,
+): { name: string; description?: string } {
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+    throw new Error(`capability manifest ${label} must be an object`);
+  }
+  const record = entry as Record<string, unknown>;
+  const raw = record[keyField];
+  if (typeof raw !== "string" || raw.trim() === "") {
+    throw new Error(`capability manifest ${label}.${keyField} is required`);
+  }
+  const name = raw.trim().toLowerCase();
+  if (!/^[a-z][a-z0-9_-]*$/u.test(name)) {
+    throw new Error(`capability manifest ${label}.${keyField} must be a lowercase identifier`);
+  }
+  const out: { name: string; description?: string } = { name };
+  if (record["description"] !== undefined) {
+    if (typeof record["description"] !== "string") {
+      throw new Error(`capability manifest ${label}.description must be a string`);
+    }
+    const description = record["description"].trim().slice(0, 200);
+    if (description !== "") {
+      out.description = description;
+    }
+  }
+  return out;
 }
 
 function parseEgress(value: unknown, index: number): ManifestEgressSpec {

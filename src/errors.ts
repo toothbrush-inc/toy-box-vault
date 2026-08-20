@@ -17,3 +17,7 @@ export class GrantError extends VaultError {
 export class EgressRequiredError extends VaultError {
   override readonly name = "EgressRequiredError";
 }
+
+export class ProfileBoundsError extends VaultError {
+  override readonly name = "ProfileBoundsError";
+}

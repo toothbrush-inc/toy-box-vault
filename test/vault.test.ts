@@ -17,7 +17,10 @@ import {
   EgressRequiredError,
   GrantError,
   grantFromManifest,
+  brokeredCommons,
+  brokeredProfile,
   KeychainError,
+  ProfileBoundsError,
   KeychainSecretStore,
   LoopbackServer,
   maskSecret,
@@ -488,6 +491,138 @@ describe("parseCapabilityManifest", () => {
     vault.putGrant(grantFromManifest(manifest, "purpleair", "default"));
 
     await expect(vault.getSecretFor("weather", "purpleair:default", "read")).resolves.toBe("pa-secret");
+  });
+});
+
+describe("profile", () => {
+  const PROFILE_MANIFEST = {
+    id: "fitness",
+    connections: [
+      { provider: "profile", slot: "default", optional: true, actions: ["units", "timezone"] },
+    ],
+  };
+
+  it("merges, deletes, and reads owner-side without grants", () => {
+    const vault = fileVault();
+    vault.putProfile({ units: "metric", timezone: "America/Los_Angeles" });
+    vault.putProfile({ units: "imperial" });
+    expect(vault.getProfile()).toEqual({ units: "imperial", timezone: "America/Los_Angeles" });
+    expect(vault.deleteProfileField("timezone")).toBe(true);
+    expect(vault.deleteProfileField("timezone")).toBe(false);
+    expect(vault.getProfile()).toEqual({ units: "imperial" });
+  });
+
+  it("enforces the not-a-data-lake bounds", () => {
+    const vault = fileVault();
+    expect(() => vault.putProfile({ units: "" })).toThrow(/must not be empty/);
+    expect(() => vault.putProfile({ "Bad Field": "x" })).toThrow(/not a valid profile field/);
+    expect(() => vault.putProfile({ units: "x".repeat(257) })).toThrow(ProfileBoundsError);
+    const many: Record<string, string> = {};
+    for (let index = 0; index < 33; index += 1) {
+      many[`field-${String(index)}`] = "v";
+    }
+    expect(() => vault.putProfile(many)).toThrow(/32 fields/);
+  });
+
+  it("gates reads per field in explicit mode and returns only set fields", async () => {
+    const vault = fileVault("explicit");
+    vault.putProfile({ units: "metric" });
+    const manifest = parseCapabilityManifest(PROFILE_MANIFEST);
+
+    await expect(vault.getProfileFor("fitness", ["units"])).rejects.toBeInstanceOf(GrantError);
+    vault.putGrant(grantFromManifest(manifest, "profile", "default"));
+
+    await expect(vault.getProfileFor("fitness", ["units", "timezone"])).resolves.toEqual({
+      units: "metric", // timezone granted but unset -> omitted
+    });
+    const denied = await vault.getProfileFor("fitness", ["birthday"]).then(
+      () => null,
+      (error: Error) => error,
+    );
+    expect(denied?.message).toContain("birthday");
+  });
+
+  it("keeps profile data when grants are revoked, and blocks reads in broker mode", async () => {
+    const vault = fileVault("explicit");
+    vault.putProfile({ units: "metric" });
+    const manifest = parseCapabilityManifest(PROFILE_MANIFEST);
+    vault.putGrant(grantFromManifest(manifest, "profile", "default"));
+    vault.revokeGrant("fitness", "profile:default");
+    await expect(vault.getProfileFor("fitness", ["units"])).rejects.toBeInstanceOf(GrantError);
+    expect(vault.getProfile()).toEqual({ units: "metric" });
+
+    const home = mkdtempSync(join(tmpdir(), "vault-"));
+    homes.push(home);
+    const brokered = openVault({
+      home,
+      backend: "file",
+      env: { VAULT_SECRETS_ACCESS: "broker" },
+    });
+    await expect(brokered.getProfileFor("fitness", ["units"])).rejects.toThrow(/broker-only/);
+    expect(() => brokered.putProfile({ units: "metric" })).not.toThrow();
+  });
+
+  it("parses the manifest data block and rejects malformed entries", () => {
+    const manifest = parseCapabilityManifest({
+      id: "fitness",
+      connections: [{ provider: "profile", slot: "default", optional: true, actions: ["units"] }],
+      data: {
+        private: [{ name: "Workouts", description: "  Personal workout ledger  " }],
+        commons: [{ dataset: "exercise-catalog" }],
+      },
+    });
+    expect(manifest.data).toEqual({
+      private: [{ name: "workouts", description: "Personal workout ledger" }],
+      commons: [{ dataset: "exercise-catalog" }],
+    });
+    expect(grantFromManifest(manifest, "profile", "default").actions).toEqual(["units"]);
+
+    expect(() =>
+      parseCapabilityManifest({ id: "x", connections: [], data: { commons: [{ dataset: "no spaces" }] } }),
+    ).toThrow(/data.commons\[0\].dataset/);
+    expect(() => parseCapabilityManifest({ id: "x", connections: [], data: [] })).toThrow(
+      /data must be an object/,
+    );
+  });
+
+  it("reads profile and commons through the broker clients", async () => {
+    const profileBroker = await fakeBroker(() => ({
+      status: 200,
+      payload: { ok: true, fields: { units: "metric" } },
+    }));
+    try {
+      await expect(
+        brokeredProfile({ url: profileBroker.url, token: "t" }, { fields: ["units", "timezone"] }),
+      ).resolves.toEqual({ units: "metric" });
+    } finally {
+      await profileBroker.close();
+    }
+
+    const denyBroker = await fakeBroker(() => ({
+      status: 403,
+      payload: { ok: false, error: { code: "grant_missing", message: "fields: units" } },
+    }));
+    try {
+      const denial = await brokeredProfile({ url: denyBroker.url, token: "t" }, { fields: ["units"] }).then(
+        () => null,
+        (error: Error & { code?: string }) => error,
+      );
+      expect(denial?.code).toBe("grant_missing");
+    } finally {
+      await denyBroker.close();
+    }
+
+    const commonsBroker = await fakeBroker(() => ({
+      status: 200,
+      payload: { ok: true, dataset: "exercise-catalog", data: { exercises: [{ name: "running" }] } },
+    }));
+    try {
+      await expect(
+        brokeredCommons({ url: commonsBroker.url, token: "t" }, { dataset: "exercise-catalog" }),
+      ).resolves.toEqual({ exercises: [{ name: "running" }] });
+    } finally {
+      await commonsBroker.close();
+    }
   });
 });
 

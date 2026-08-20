@@ -122,9 +122,11 @@ Expose the capability as a **stdio** MCP server (`@modelcontextprotocol/sdk`):
 - Sanitize every payload: no secrets, tokens, or key-bearing URLs in results;
   masked status only (`maskSecret`). Grep your test output for a planted secret
   to prove it.
-- Provide `get_status` (connection + grant state, masked) and
+- Provide `get_status` (connection + grant state, masked; must work with
+  nothing configured). Capabilities with credentialed connections also provide
   `connect_provider` (returns `{url, expires_at}`; **never accepts a secret as
-  an argument**).
+  an argument**) — a pure-ledger capability with no credentialed connections
+  needs no connect flow at all.
 - Optional but encouraged: a `request_capability` gap tool that records what
   users asked for and couldn't have (weather `lib/gaps.mjs`).
 
@@ -213,6 +215,11 @@ the mode (weather-compare's `lib/provider-http.mjs` and calsync's
 `status()`-based helpers, never fetch-path reads. Never require users to set
 any `VAULT_*` variable by hand — the platform injects them.
 
+The same three modes govern **profile and commons** access (§9): standalone
+uses `getProfileFor` / a local dataset fallback; brokered uses
+`brokeredProfile` / `brokeredCommons`; broker-only blocks direct profile
+fetch-path reads exactly like secrets.
+
 ### How users deploy it
 
 **Standalone** (an MCP client config):
@@ -245,6 +252,52 @@ the agent-facing API and arrive prefixed (`yourapp__<tool>`).
 - Tool names and result shapes are the public API — additive changes only.
 - Track `@local/vault` minor versions; the barrel at the bottom of this doc is
   the full API you may rely on.
+
+## 9. Data classes
+
+Every piece of data a capability touches falls into one of three classes.
+
+**Private data — the capability's own ledgers.** Workout logs, sync mappings,
+collected history. Stored in files the capability names via its **own** env
+vars (convention: `<ID>_DB`, e.g. `FITNESS_DB`, `WEATHER_DB`), defaulting to
+its working directory. Never read or write another capability's files — other
+capabilities (and the agent) reach this data only through your tools; the
+agent is the join layer across capabilities. Declare ledgers in the manifest's
+optional `data.private` block (`[{ "name": "workouts", "description": "…" }]`)
+— visibility metadata surfaced by the platform, not an access mechanism.
+
+**User/profile data — tiny shared facts, grant-gated per field.** The platform
+keeps one small profile (`profile.json` in the vault home): stable facts many
+capabilities need. Canonical fields: `units` (`imperial`|`metric`), `timezone`
+(IANA name), `home_lat`/`home_lon`, `birthday` (ISO date), `locale`. Hard
+bounds enforced in code: **32 fields, values ≤ 256 chars, ≤ 16 KB total** — it
+must not grow into a data lake. To use it, declare a **profile connection**:
+
+```json
+{ "provider": "profile", "slot": "default", "optional": true, "actions": ["units", "timezone"] }
+```
+
+`actions` are the FIELD names — and for profile connections they are
+**mandatory**: an omitted `actions` array declares no fields (unlike
+credential connections, where it means "all actions"). Reads: standalone →
+`getProfileFor(MANIFEST.id, ["units","timezone"])`; under a gateway →
+`brokeredProfile(egress, {fields})`. A granted-but-unset field is simply
+omitted — apply your defaults. An ungranted field fails with a coded
+`grant_missing`/`GrantError`; a conforming capability **degrades gracefully**
+(defaults plus an actionable note), never crashes. Never attach an `egress`
+spec to a profile connection. Profile values are not secrets (plain display in
+tool results is fine) — but they must never appear in logs or audit output;
+audit rows carry field names only. Profile data always survives grant
+revocation: access dies, data stays.
+
+**Commons data — public, platform-owned, read-only.** Non-personal shared
+datasets (an exercise catalog; hosted later, deduped weather readings).
+Declare what you consult in `data.commons`
+(`[{ "dataset": "exercise-catalog" }]`). Reads: under a gateway →
+`brokeredCommons(egress, {dataset, key?})` (audited; the dataset must be
+declared); standalone → a documented local fallback (a `COMMONS_DIR` env
+and/or a bundled copy). No grants — commons is public-read by definition — and
+the capability must keep working when the dataset is unavailable.
 
 ## Acceptance checklist
 
@@ -279,11 +332,24 @@ A new capability conforms when all of these hold:
 - [ ] Delivery: `npm install github:you/your-capability` yields a runnable
       stdio MCP entrypoint, and the README documents connections, tools,
       background jobs, and both deployment shapes.
+- [ ] Every profile field read is declared as an action on the capability's
+      `profile:default` connection; under `VAULT_GRANT_MODE=explicit` an
+      ungranted field degrades gracefully with an actionable note, never a
+      crash.
+- [ ] Private ledgers are declared in `data.private`, their paths come from
+      the capability's own env vars, and no code path touches another
+      capability's data files.
+- [ ] Commons datasets consulted are declared in `data.commons`, and the
+      capability works when a dataset is unavailable.
+- [ ] Profile values never appear in logs or audit output — asserted by a
+      test. Tool results may display them.
 
 Everything referenced here is exported from the `@local/vault` barrel:
 `openVault`, `connectionId`, `grantId`, `maskSecret`, `parseCapabilityManifest`,
 `grantFromManifest`, `LoopbackServer`, `ApiKeyLoopback`, `egressFromEnv`,
-`brokeredGet`, `brokeredToken`, `GrantError`, `EgressRequiredError`, and the
-types (`CapabilityManifest`, `ManifestConnectionNeed`, `ManifestEgressSpec`,
-`PutGrantInput`, `GrantRecord`, `ConnectionView`, `EgressEndpoint`,
-`BrokeredResponse`, `BrokeredToken`, `SecretsAccess`).
+`brokeredGet`, `brokeredToken`, `brokeredProfile`, `brokeredCommons`,
+`GrantError`, `EgressRequiredError`, `ProfileBoundsError`, the `PROFILE_*`
+constants, and the types (`CapabilityManifest`, `ManifestConnectionNeed`,
+`ManifestEgressSpec`, `ManifestData`, `PutGrantInput`, `GrantRecord`,
+`ConnectionView`, `EgressEndpoint`, `BrokeredResponse`, `BrokeredToken`,
+`SecretsAccess`, `ProfileStore`).
