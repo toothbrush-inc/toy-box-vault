@@ -176,6 +176,16 @@ capability must work in all three modes: standalone (no egress env, reads via
 `getSecretFor`), brokered (egress env present, fetches via `brokeredGet`), and
 broker-only (both).
 
+**Keyless-by-default providers.** Some APIs work without a credential
+(Open-Meteo's public tier). Brokered egress is still grant-gated — the grant
+authorizes the outbound call, not just the key — so the repair for a denied
+fetch differs by provider kind, and your error messages must say the right
+thing: for a keyless provider point at the *grant* ("grant
+`<provider>:<slot>` — no key needed", e.g. the gateway's `gateway_grant`),
+never at the key form. Connect flows for keyless providers must complete on
+an empty submission (`ApiKeyLoopbackPage.allowEmpty`) by writing the grant
+without storing a secret; the key form is only for optional paid tiers.
+
 ## 7. Standalone rule
 
 A capability must run with only `@local/vault` and its own repo — no gateway,

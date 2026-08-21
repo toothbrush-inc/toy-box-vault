@@ -15,6 +15,11 @@ export interface ApiKeyLoopbackPage {
   helpUrl?: string;
   helpLabel?: string;
   successText?: string;
+  /** Keyless-by-default providers: an empty submission completes the flow and
+   * `waitForSecret()` resolves to "" — the caller grants without storing. */
+  allowEmpty?: boolean;
+  /** Button label for the empty submission (default "Continue without a key"). */
+  emptyLabel?: string;
 }
 
 export interface ApiKeyLoopbackOptions {
@@ -190,7 +195,7 @@ async function handleApiKeyRequest(
   }
 
   const secret = (params.get("api_key") ?? "").trim();
-  if (secret.length === 0) {
+  if (secret.length === 0 && context.page.allowEmpty !== true) {
     writeHtml(
       response,
       400,
@@ -262,7 +267,11 @@ function renderForm(page: ApiKeyLoopbackPage, state: string, error?: string): st
     <label>${escapeHtml(page.fieldLabel)}
       <input type="password" name="api_key" autocomplete="off" autofocus/>
     </label>
-    <div><button type="submit">Save to vault</button></div>
+    <div><button type="submit">Save to vault</button>${
+      page.allowEmpty === true
+        ? `<button type="submit" formnovalidate onclick="this.form.api_key.value=''">${escapeHtml(page.emptyLabel ?? "Continue without a key")}</button>`
+        : ""
+    }</div>
   </form>
   <p class="note">The key is stored locally. It is never sent to chat.</p>
 </body>
