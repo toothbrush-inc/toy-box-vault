@@ -295,6 +295,28 @@ describe("ApiKeyLoopback", () => {
     }
   });
 
+  it("accepts an empty submission for keyless providers (allowEmpty)", async () => {
+    const server = await ApiKeyLoopback.start({
+      page: { ...page, allowEmpty: true, message: "Optional; the public API needs no key." },
+      timeoutMs: 5_000,
+      state: "keyless-state",
+    });
+    try {
+      const pending = server.waitForSecret();
+      const html = await (await fetch(server.url)).text();
+      expect(html).toContain("Continue without a key");
+      const posted = await fetch(server.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "state=keyless-state&api_key=",
+      });
+      expect(posted.ok).toBe(true);
+      await expect(pending).resolves.toBe("");
+    } finally {
+      server.close();
+    }
+  });
+
   it("rejects an empty key and a mismatched state", async () => {
     const server = await ApiKeyLoopback.start({ page, timeoutMs: 5_000, state: "expected-state" });
     try {
