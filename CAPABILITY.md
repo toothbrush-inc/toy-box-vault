@@ -131,6 +131,20 @@ Expose the capability as a **stdio** MCP server (`@modelcontextprotocol/sdk`):
   needs no connect flow at all.
 - Optional but encouraged: a `request_capability` gap tool that records what
   users asked for and couldn't have (weather `lib/gaps.mjs`).
+- **Wrap the server in `withCallScope`** (from `@local/vault/kit`) before
+  registering tools:
+
+  ```js
+  const server = withCallScope(new McpServer({ name, version }));
+  ```
+
+  Under a gateway one process serves every user, and the caller travels as an
+  opaque nonce in each call's `_meta`. The wrapper puts it in ambient context
+  so `profileContext` and the brokered helpers resolve the right user with no
+  per-tool wiring. Standalone there is no `_meta` and handlers run unwrapped,
+  so behaviour on your own is unchanged (§7). You never see a user identity —
+  only the broker can resolve the nonce, so a capability cannot name a user it
+  was not handed.
 
 ## 6. Brokered egress
 
@@ -301,6 +315,13 @@ spec to a profile connection. Profile values are not secrets (plain display in
 tool results is fine) — but they must never appear in logs or audit output;
 audit rows carry field names only. Profile data always survives grant
 revocation: access dies, data stays.
+
+**Never cache per-user data in module scope.** One process serves every user,
+so a module-level `let units` or a memoised location outlives the call that set
+it and will serve one user's value to the next — silently, with nothing in the
+logs. Read per-user values per call (the context is ambient, so this is cheap),
+or key any cache by something the call provides. Caching *non*-personal data —
+a commons dataset, a geocoding result — is fine.
 
 **Commons data — public, platform-owned, read-only.** Non-personal shared
 datasets (an exercise catalog; hosted later, deduped weather readings).

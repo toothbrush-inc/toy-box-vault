@@ -15,6 +15,7 @@ import {
   type BrokeredCallResult,
   type PeerProvenance,
 } from "./egress.js";
+import { withCallContext } from "./call-context.js";
 import { openVault } from "./vault.js";
 
 // ---------------------------------------------------------------- results --
@@ -248,4 +249,65 @@ export async function commonsDataset(
     }
   }
   return { data: null, source: "none" };
+}
+
+// ----------------------------------------------------------- call scope --
+
+/** Key the gateway sets in a forwarded call's `_meta` to name the caller. */
+export const CALL_NONCE_META_KEY = "callNonce";
+
+type ToolHandler = (...args: unknown[]) => unknown;
+
+interface ToolRegistrar {
+  registerTool: (name: string, config: unknown, handler: ToolHandler) => unknown;
+}
+
+function hasRegisterTool(value: unknown): value is ToolRegistrar {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { registerTool?: unknown }).registerTool === "function"
+  );
+}
+
+function nonceFrom(extra: unknown): string | undefined {
+  if (typeof extra !== "object" || extra === null) {
+    return undefined;
+  }
+  const meta = (extra as { _meta?: unknown })._meta;
+  if (typeof meta !== "object" || meta === null) {
+    return undefined;
+  }
+  const nonce = (meta as Record<string, unknown>)[CALL_NONCE_META_KEY];
+  return typeof nonce === "string" && nonce !== "" ? nonce : undefined;
+}
+
+/**
+ * Makes every tool this server registers run inside the caller's context, so
+ * `profileContext` and the brokered helpers resolve the right user with no
+ * per-tool wiring. Call it once, before registering tools:
+ *
+ *     const server = withCallScope(new McpServer({ ... }));
+ *
+ * Standalone (no gateway, no `_meta`) the handler runs unwrapped, so a
+ * capability behaves identically on its own — the contract's standalone rule.
+ *
+ * Because the context is ambient rather than a handler argument, **per-user
+ * state must never be cached in module scope**: one process serves everyone,
+ * and a module-level value would outlive the call that set it.
+ */
+export function withCallScope<T>(server: T): T {
+  if (!hasRegisterTool(server)) {
+    throw new TypeError("withCallScope: expected an MCP server exposing registerTool");
+  }
+  const register = server.registerTool.bind(server);
+  server.registerTool = (name: string, config: unknown, handler: ToolHandler): unknown =>
+    register(name, config, (...args: unknown[]): unknown => {
+      // The SDK passes `extra` last, with or without a leading args object.
+      const nonce = nonceFrom(args[args.length - 1]);
+      return nonce === undefined
+        ? handler(...args)
+        : withCallContext({ callNonce: nonce }, () => handler(...args));
+    });
+  return server;
 }

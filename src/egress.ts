@@ -1,3 +1,5 @@
+import { currentCallContext } from "./call-context.js";
+
 // Client side of brokered egress. A gateway/broker hands a capability its
 // endpoint via VAULT_EGRESS_URL + VAULT_EGRESS_TOKEN; credentialed requests go
 // through the broker, which owns credential attachment and host allowlists.
@@ -261,6 +263,15 @@ export async function brokeredCall(
   };
 }
 
+/**
+ * The caller identity travels as an opaque nonce, never an email: the broker
+ * alone can resolve it, so a capability cannot name a user it was not given.
+ */
+function callHeaders(): Record<string, string> {
+  const nonce = currentCallContext()?.callNonce;
+  return nonce === undefined || nonce === "" ? {} : { "X-Vault-Call": nonce };
+}
+
 async function postJson(
   egress: EgressEndpoint,
   path: string,
@@ -273,6 +284,8 @@ async function postJson(
       headers: {
         Authorization: `Bearer ${egress.token}`,
         "Content-Type": "application/json",
+        // Present only under a gateway that minted one; standalone stays bare.
+        ...callHeaders(),
       },
       cache: "no-store",
       body: JSON.stringify(body),

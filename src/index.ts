@@ -1,3 +1,8 @@
+export {
+  currentCallContext,
+  withCallContext,
+  type CallContext,
+} from "./call-context.js";
 export { FileConnectionStore, connectionsPath } from "./connections.js";
 export { FileGrantStore, grantsPath } from "./grants.js";
 export {
