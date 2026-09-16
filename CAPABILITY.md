@@ -42,6 +42,37 @@ Ship a `capability.json` at your package root and parse it at startup with
     `["read"]` or `["read", "write"]`. Omit for "all actions". Keep the
     vocabulary plain; per-endpoint enforcement is the future broker's job.
 
+- `store` (optional object) — the words a storefront uses for this app: the
+  gateway's public `/` page, its `gateway_status` output, and any agent index.
+  The app owns these words; a deployment may override any field in its own
+  config. `name` is required; everything else is optional.
+
+  ```json
+  "store": {
+    "name": "Weather",
+    "tagline": "Know which forecast to trust before you plan the day.",
+    "description": "Three forecasts side by side for the places you follow, with a running score of who was right.",
+    "highlights": ["Today's high and low", "Air quality from a sensor near you"],
+    "badge": "beta",
+    "accent": "sky",
+    "web": { "path": "/weather" },
+    "repo": "https://github.com/davidd8/weather-patterns"
+  }
+  ```
+
+  - `name` (≤60) — what people call the app; the tile label.
+  - `tagline` (≤120) — one line under the name: what it does for you.
+  - `description` (≤600) — a short paragraph on why it is valuable.
+  - `highlights` (≤4 lines, ≤120 each) — concrete reasons, one per line.
+  - `badge` (≤20) — a status word such as `beta` or `new`.
+  - `accent` — one of `sky`, `leaf`, `marigold`, `plum`, `clay`, `slate`.
+  - `web.path` — an absolute path where the app's own web UI mounts under a
+    store domain. Omit for an agent-only capability (tools, no page).
+  - `repo` — the open-source repository, so a reader can run it themselves.
+
+  Use the same `name` and `tagline` at the top of the README, so the repo,
+  the store tile, and the assistant's index all say the same thing.
+
 `parseCapabilityManifest` trims and lowercases `id`, `provider`, and `slot`,
 and rejects anything malformed with an indexed error message.
 
@@ -222,10 +253,18 @@ What an app developer ships, and how users run it.
 - **A stdio MCP entrypoint** — a `bin` or a documented
   `node <path>` command. stdout is the MCP wire; all diagnostics go to stderr.
   This entrypoint is the unit both Claude/Cursor configs and the gateway spawn.
-- **A README** covering: which connections the capability needs and how a user
-  obtains keys/accounts; the `connect_provider` flow; the tool list; any
-  background jobs (schedulers, launchd) and how to install them; and the two
-  deployment shapes below.
+- **A README** that opens the way the store tile does and then tells a
+  reader how to run it. In order: the `store.name` and `store.tagline` as the
+  title; a "Two ways to use it" section (hosted at the store vs. run it
+  yourself); how it works; what you get; quick start; "Use it from your
+  assistant" with the MCP client config and a table of tools (name, what it
+  does, reads/writes); privacy and data (what is stored, where, what leaves
+  the machine); and a "For developers" section holding which connections the
+  capability needs and how a user obtains keys/accounts, the
+  `connect_provider` flow, any background jobs (schedulers, launchd) and how
+  to install them, and the two deployment shapes below. Contract detail
+  (run modes, data classes, section references) belongs under "For
+  developers", not above it.
 
 ### The three run modes (all mandatory)
 
@@ -382,6 +421,8 @@ A new capability conforms when all of these hold:
 
 - [ ] `capability.json` at the package root parses with
       `parseCapabilityManifest` at startup.
+- [ ] The manifest's `store` block names the app, and the README's title and
+      tagline use the same words.
 - [ ] All external-service use is declared in the manifest; provider/slot/action
       names follow the naming rules.
 - [ ] Connecting a provider writes the secret via `putSecret` and registers a
