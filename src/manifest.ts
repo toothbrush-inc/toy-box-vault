@@ -4,15 +4,24 @@ import {
   type ManifestConnectionNeed,
   type ManifestData,
   type ManifestEgressSpec,
+  type ManifestStore,
   type ManifestTools,
   type PutGrantInput,
+  STORE_ACCENTS,
+  type StoreAccent,
 } from "./types.js";
 
 export function parseCapabilityManifest(value: unknown): CapabilityManifest {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error("capability manifest must be an object");
   }
-  const record = value as { id?: unknown; connections?: unknown; data?: unknown; tools?: unknown };
+  const record = value as {
+    id?: unknown;
+    connections?: unknown;
+    data?: unknown;
+    tools?: unknown;
+    store?: unknown;
+  };
   if (typeof record.id !== "string" || record.id.trim() === "") {
     throw new Error("capability manifest id is required");
   }
@@ -62,7 +71,99 @@ export function parseCapabilityManifest(value: unknown): CapabilityManifest {
   if (record.tools !== undefined) {
     manifest.tools = parseTools(record.tools);
   }
+  if (record.store !== undefined) {
+    manifest.store = parseStore(record.store);
+  }
   return manifest;
+}
+
+const STORE_LIMITS = { name: 60, tagline: 120, description: 600, highlight: 120, badge: 20 } as const;
+const STORE_MAX_HIGHLIGHTS = 4;
+
+function storeText(value: unknown, field: string, max: number, required = false): string | undefined {
+  if (value === undefined) {
+    if (required) {
+      throw new Error(`capability manifest store.${field} is required`);
+    }
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    throw new Error(`capability manifest store.${field} must be a string`);
+  }
+  const text = value.trim();
+  if (text === "") {
+    if (required) {
+      throw new Error(`capability manifest store.${field} is required`);
+    }
+    return undefined;
+  }
+  if (text.length > max) {
+    throw new Error(`capability manifest store.${field} must be at most ${String(max)} characters`);
+  }
+  return text;
+}
+
+function parseStore(value: unknown): ManifestStore {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("capability manifest store must be an object");
+  }
+  const record = value as {
+    name?: unknown;
+    tagline?: unknown;
+    description?: unknown;
+    highlights?: unknown;
+    badge?: unknown;
+    accent?: unknown;
+    web?: unknown;
+    repo?: unknown;
+  };
+  const store: ManifestStore = { name: storeText(record.name, "name", STORE_LIMITS.name, true) as string };
+  const tagline = storeText(record.tagline, "tagline", STORE_LIMITS.tagline);
+  if (tagline !== undefined) {
+    store.tagline = tagline;
+  }
+  const description = storeText(record.description, "description", STORE_LIMITS.description);
+  if (description !== undefined) {
+    store.description = description;
+  }
+  if (record.highlights !== undefined) {
+    if (!Array.isArray(record.highlights)) {
+      throw new Error("capability manifest store.highlights must be an array");
+    }
+    if (record.highlights.length > STORE_MAX_HIGHLIGHTS) {
+      throw new Error(`capability manifest store.highlights must have at most ${String(STORE_MAX_HIGHLIGHTS)} entries`);
+    }
+    store.highlights = record.highlights.map(
+      (line, index) => storeText(line, `highlights[${String(index)}]`, STORE_LIMITS.highlight, true) as string,
+    );
+  }
+  const badge = storeText(record.badge, "badge", STORE_LIMITS.badge);
+  if (badge !== undefined) {
+    store.badge = badge;
+  }
+  if (record.accent !== undefined) {
+    if (typeof record.accent !== "string" || !(STORE_ACCENTS as readonly string[]).includes(record.accent)) {
+      throw new Error(`capability manifest store.accent must be one of ${STORE_ACCENTS.join(", ")}`);
+    }
+    store.accent = record.accent as StoreAccent;
+  }
+  if (record.web !== undefined) {
+    if (typeof record.web !== "object" || record.web === null || Array.isArray(record.web)) {
+      throw new Error("capability manifest store.web must be an object");
+    }
+    const path = (record.web as { path?: unknown }).path;
+    if (typeof path !== "string" || !/^\/[A-Za-z0-9/_-]*$/u.test(path)) {
+      throw new Error("capability manifest store.web.path must be an absolute path");
+    }
+    store.web = { path };
+  }
+  if (record.repo !== undefined) {
+    if (typeof record.repo !== "string" || !/^https?:\/\/\S+$/u.test(record.repo.trim())) {
+      throw new Error("capability manifest store.repo must be an http(s) URL");
+    }
+    store.repo = record.repo.trim();
+  }
+  return store;
 }
 
 function parseTools(value: unknown): ManifestTools {

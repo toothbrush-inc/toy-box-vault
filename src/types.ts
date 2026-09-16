@@ -131,11 +131,38 @@ export interface ManifestTools {
   query?: string[];
 }
 
+/** Named tints a store page may paint an app's tile with. */
+export const STORE_ACCENTS = ["sky", "leaf", "marigold", "plum", "clay", "slate"] as const;
+export type StoreAccent = (typeof STORE_ACCENTS)[number];
+
+/** The words a storefront (the gateway's `/` page, its status output, an
+ * agent's index) uses for this app. The app owns these; a deployment may
+ * override any field. `name` is the only required one. */
+export interface ManifestStore {
+  /** What people call the app ("Weather"); ≤60 chars. */
+  name: string;
+  /** One line under the name: what it does for you; ≤120. */
+  tagline?: string;
+  /** A short paragraph on why it is valuable; ≤600. */
+  description?: string;
+  /** Up to four concrete reasons, one line (≤120) each. */
+  highlights?: string[];
+  /** A short status word ("beta", "new"); ≤20. */
+  badge?: string;
+  accent?: StoreAccent;
+  /** Where the app's own web UI mounts under a store domain. Omit for an
+   * agent-only capability (tools, no page). */
+  web?: { path: string };
+  /** The open-source repository, so a reader can run it themselves. */
+  repo?: string;
+}
+
 export interface CapabilityManifest {
   id: string;
   connections: ManifestConnectionNeed[];
   data?: ManifestData;
   tools?: ManifestTools;
+  store?: ManifestStore;
 }
 
 export function connectionId(provider: string, slot: string): string {
