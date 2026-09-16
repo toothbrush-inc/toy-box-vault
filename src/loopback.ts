@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
 import { LoopbackError } from "./errors.js";
@@ -17,6 +18,14 @@ export interface LoopbackServerOptions {
   port?: number;
   /** When set (e.g. https://gw.example.com), redirectUri advertises `${publicBaseUrl}${path}`. */
   publicBaseUrl?: string;
+  /**
+   * The OAuth `state` this authorization was started with. When set, only a
+   * callback carrying exactly this value settles the capture; any other
+   * request to the path is answered 400 and otherwise ignored. Without it the
+   * first request wins — fine on a loopback port, but on a public callback
+   * URL a stranger could abort (or race) a pending authorization.
+   */
+  expectedState?: string;
 }
 
 export class LoopbackServer {
@@ -54,8 +63,9 @@ export class LoopbackServer {
     });
     void aborted.catch(() => undefined);
 
+    const expectedState = options.expectedState;
     const server = createServer((request, response) => {
-      handleLoopbackRequest(request, response, path, successText, resolveCaptured);
+      handleLoopbackRequest(request, response, path, successText, resolveCaptured, expectedState);
     });
 
     await new Promise<void>((resolve, reject) => {
@@ -118,6 +128,7 @@ function handleLoopbackRequest(
   path: string,
   successText: string,
   resolveCaptured: (value: URLSearchParams) => void,
+  expectedState?: string,
 ): void {
   const url = new URL(request.url ?? "/", "http://127.0.0.1");
   response.setHeader("Content-Type", "text/plain; charset=utf-8");
@@ -137,7 +148,21 @@ function handleLoopbackRequest(
     response.end();
     return;
   }
+  if (expectedState !== undefined && !stateMatches(url.searchParams.get("state"), expectedState)) {
+    response.statusCode = 400;
+    response.end("This authorization attempt is unknown or has expired. Start over from the app.");
+    return;
+  }
 
   resolveCaptured(url.searchParams);
   response.end(successText);
+}
+
+function stateMatches(presented: string | null, expected: string): boolean {
+  if (presented === null) {
+    return false;
+  }
+  const a = Buffer.from(presented, "utf8");
+  const b = Buffer.from(expected, "utf8");
+  return a.length === b.length && timingSafeEqual(a, b);
 }
