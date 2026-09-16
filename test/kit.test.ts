@@ -210,3 +210,59 @@ describe("manifest private ledger env/file", () => {
     ).toThrow(/bare filename/);
   });
 });
+
+describe("manifest store", () => {
+  it("parses the storefront block and enforces its limits", () => {
+    const manifest = parseCapabilityManifest({
+      id: "weather",
+      connections: [],
+      store: {
+        name: " Weather ",
+        tagline: "Know which forecast to trust.",
+        description: "Three forecasts side by side.",
+        highlights: ["Air quality near you", "A heads-up when tomorrow is odd"],
+        badge: "beta",
+        accent: "sky",
+        web: { path: "/weather" },
+        repo: "https://github.com/davidd8/weather-compare",
+      },
+    });
+    expect(manifest.store).toEqual({
+      name: "Weather",
+      tagline: "Know which forecast to trust.",
+      description: "Three forecasts side by side.",
+      highlights: ["Air quality near you", "A heads-up when tomorrow is odd"],
+      badge: "beta",
+      accent: "sky",
+      web: { path: "/weather" },
+      repo: "https://github.com/davidd8/weather-compare",
+    });
+
+    expect(parseCapabilityManifest({ id: "x", connections: [] }).store).toBeUndefined();
+    expect(parseCapabilityManifest({ id: "x", connections: [], store: { name: "X" } }).store).toEqual({
+      name: "X",
+    });
+    expect(() => parseCapabilityManifest({ id: "x", connections: [], store: {} })).toThrow(
+      /store.name is required/,
+    );
+    expect(() =>
+      parseCapabilityManifest({ id: "x", connections: [], store: { name: "X", tagline: "t".repeat(121) } }),
+    ).toThrow(/store.tagline must be at most 120/);
+    expect(() =>
+      parseCapabilityManifest({
+        id: "x",
+        connections: [],
+        store: { name: "X", highlights: ["a", "b", "c", "d", "e"] },
+      }),
+    ).toThrow(/highlights must have at most 4/);
+    expect(() =>
+      parseCapabilityManifest({ id: "x", connections: [], store: { name: "X", accent: "teal" } }),
+    ).toThrow(/store.accent must be one of/);
+    expect(() =>
+      parseCapabilityManifest({ id: "x", connections: [], store: { name: "X", web: { path: "weather" } } }),
+    ).toThrow(/store.web.path must be an absolute path/);
+    expect(() =>
+      parseCapabilityManifest({ id: "x", connections: [], store: { name: "X", repo: "github.com/x" } }),
+    ).toThrow(/store.repo must be an http\(s\) URL/);
+  });
+});
