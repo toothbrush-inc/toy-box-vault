@@ -98,7 +98,7 @@ Always build ids with `connectionId()` / `grantId()`; never concatenate by hand.
 ## 3. Vault usage
 
 Depend on `@dvd-toy-box/vault` via `package.json` (`npm install
-github:davidd8/local-vault`), never a relative sibling path. Call `openVault()`
+github:toothbrush-inc/toy-box-vault`), never a relative sibling path. Call `openVault()`
 with no arguments so `VAULT_HOME` and `VAULT_SECRETS_BACKEND` keep working.
 
 **Connect** — the browser gets the secret; tools and chat never do:

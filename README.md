@@ -18,13 +18,13 @@ and unchanged under the gateway.
 This package is not published to npm. Install it from GitHub:
 
 ```sh
-npm install github:davidd8/local-vault
+npm install github:toothbrush-inc/toy-box-vault
 ```
 
 Pin a tag or commit for reproducible builds:
 
 ```sh
-npm install github:davidd8/local-vault#<tag-or-sha>
+npm install github:toothbrush-inc/toy-box-vault#<tag-or-sha>
 ```
 
 The package is `@dvd-toy-box/vault`. It is not on npm yet; the `@dvd-toy-box`
@@ -139,7 +139,7 @@ trust boundary. There is no sandboxing of capabilities; under the gateway,
 ## Reporting a vulnerability
 
 Please report security issues privately through
-[GitHub Security Advisories](https://github.com/davidd8/local-vault/security/advisories/new)
+[GitHub Security Advisories](https://github.com/toothbrush-inc/toy-box-vault/security/advisories/new)
 rather than a public issue.
 
 ## Related repositories
