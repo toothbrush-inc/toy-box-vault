@@ -1,9 +1,4 @@
-export {
-  identitySlug,
-  legacyTenantSlug,
-  legacyUserSlug,
-  tenantForIdentity,
-} from "./identity.js";
+export { identitySlug, tenantForIdentity } from "./identity.js";
 export {
   currentCallContext,
   withCallContext,
