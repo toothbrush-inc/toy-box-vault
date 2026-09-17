@@ -15,21 +15,19 @@ and unchanged under the gateway.
 
 ## Install
 
-This package is not published to npm. Install it from GitHub:
-
 ```sh
-npm install github:toothbrush-inc/toy-box-vault
+npm install @dvd-toy-box/vault
 ```
 
-Pin a tag or commit for reproducible builds:
+Requires Node 20 or newer. The `@dvd-toy-box` scope is the home for this and
+the other toy-box packages.
+
+To track a commit that is not on npm yet, install from GitHub instead, pinned
+to a tag or commit:
 
 ```sh
 npm install github:toothbrush-inc/toy-box-vault#<tag-or-sha>
 ```
-
-The package is `@dvd-toy-box/vault`. It is not on npm yet; the `@dvd-toy-box`
-scope is the home for this and the other toy-box packages. Requires Node 20 or
-newer.
 
 ```js
 import { openVault, LoopbackServer, ApiKeyLoopback } from "@dvd-toy-box/vault";
