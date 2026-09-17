@@ -208,6 +208,8 @@ export async function peerCall(
 
 // ---------------------------------------------------------------- commons --
 
+const COMMONS_DATASET_NAME = /^[a-z][a-z0-9_-]*$/u;
+
 export interface CommonsResult {
   data: unknown;
   source: "broker" | "dir" | "bundled" | "none";
@@ -223,7 +225,11 @@ export async function commonsDataset(
   options: { bundled?: unknown | (() => unknown); env?: NodeJS.ProcessEnv } = {},
 ): Promise<CommonsResult> {
   const env = options.env ?? process.env;
-  const egress = egressFromEnv(env);
+  // Same rule the manifest applies to `data.commons[].dataset`. The name is
+  // joined into a path below, so anything else (`../x`, `/etc/x`) must not
+  // reach the broker or the filesystem; it can still fall to the bundled copy.
+  const named = COMMONS_DATASET_NAME.test(dataset);
+  const egress = named ? egressFromEnv(env) : null;
   if (egress) {
     try {
       return { data: await brokeredCommons(egress, { dataset }), source: "broker" };
@@ -232,7 +238,7 @@ export async function commonsDataset(
     }
   }
   const dir = env["COMMONS_DIR"];
-  if (dir !== undefined && dir.trim() !== "") {
+  if (named && dir !== undefined && dir.trim() !== "") {
     try {
       return { data: JSON.parse(readFileSync(join(dir, `${dataset}.json`), "utf8")), source: "dir" };
     } catch {

@@ -8,19 +8,38 @@ async function hit(server: LoopbackServer, query: string): Promise<Response> {
 }
 
 describe("LoopbackServer", () => {
-  it("settles on the first callback when no state is expected", async () => {
+  it("mints a state when none is given and refuses callbacks without it", async () => {
     const server = await LoopbackServer.start();
     try {
-      const response = await hit(server, "?code=abc");
-      expect(response.status).toBe(200);
+      expect(server.state.length).toBeGreaterThanOrEqual(32);
+      let settled = false;
+      void server.waitForParams().then(() => {
+        settled = true;
+      });
+      expect((await hit(server, "?code=abc")).status).toBe(400);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(settled).toBe(false);
+
+      const real = await hit(server, `?code=abc&state=${encodeURIComponent(server.state)}`);
+      expect(real.status).toBe(200);
       expect((await server.waitForParams()).get("code")).toBe("abc");
     } finally {
       server.close();
     }
   });
 
+  it("rejects an empty state and still honours the expectedState alias", async () => {
+    await expect(LoopbackServer.start({ state: " " })).rejects.toThrow(/must not be empty/);
+    const server = await LoopbackServer.start({ expectedState: "alias-state" });
+    try {
+      expect(server.state).toBe("alias-state");
+    } finally {
+      server.close();
+    }
+  });
+
   it("ignores callbacks that do not carry the expected state", async () => {
-    const server = await LoopbackServer.start({ expectedState: "s3cret-state" });
+    const server = await LoopbackServer.start({ state: "s3cret-state" });
     try {
       let settled = false;
       void server.waitForParams().then(() => {

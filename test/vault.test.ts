@@ -178,6 +178,7 @@ describe("LoopbackServer", () => {
       path: "/oauth2callback",
       successText: "calsync authorization complete. You can close this window.",
       timeoutMs: 5_000,
+      state: "csrf",
     });
     try {
       const pending = server.waitForParams();
@@ -203,7 +204,7 @@ describe("LoopbackServer", () => {
       const pending = server.waitForParams();
       const address = (server as unknown as { server: { address(): { port: number } } }).server.address();
       const response = await fetch(
-        `http://127.0.0.1:${String(address.port)}/oauth2callback/personal?code=pub-code`,
+        `http://127.0.0.1:${String(address.port)}/oauth2callback/personal?code=pub-code&state=${server.state}`,
       );
       expect(response.ok).toBe(true);
       expect((await pending).get("code")).toBe("pub-code");
@@ -231,7 +232,7 @@ describe("LoopbackServer", () => {
       const pending = server.waitForParams();
       const favicon = await fetch(new URL("/favicon.ico", server.redirectUri));
       expect(favicon.status).toBe(404);
-      const response = await fetch(`${server.redirectUri}?code=second`);
+      const response = await fetch(`${server.redirectUri}?code=second&state=${server.state}`);
       expect(response.ok).toBe(true);
       expect((await pending).get("code")).toBe("second");
     } finally {

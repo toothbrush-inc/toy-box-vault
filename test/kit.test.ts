@@ -116,6 +116,18 @@ describe("kit commonsDataset", () => {
     const none = await commonsDataset("cat", { env: {} as NodeJS.ProcessEnv });
     expect(none).toEqual({ data: null, source: "none" });
   });
+
+  it("never joins a non-identifier dataset name into a path", async () => {
+    const dir = tempDir();
+    mkdirSync(join(dir, "secret"), { recursive: true });
+    writeFileSync(join(dir, "secret", "keys.json"), JSON.stringify({ leaked: true }));
+    const env = { COMMONS_DIR: join(dir, "public") } as NodeJS.ProcessEnv;
+    for (const name of ["../secret/keys", "/abs/keys", "Cat", "a b", ""]) {
+      expect(await commonsDataset(name, { env })).toEqual({ data: null, source: "none" });
+    }
+    const bundled = await commonsDataset("../secret/keys", { env, bundled: { own: true } });
+    expect(bundled).toEqual({ data: { own: true }, source: "bundled" });
+  });
 });
 
 describe("kit peerCall", () => {

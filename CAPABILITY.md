@@ -104,7 +104,8 @@ with no arguments so `VAULT_HOME` and `VAULT_SECRETS_BACKEND` keep working.
 **Connect** — the browser gets the secret; tools and chat never do:
 
 - OAuth providers: run the auth-code flow against a `LoopbackServer` redirect
-  (calsync `apps/cli/src/google/auth.ts`).
+  (calsync `apps/cli/src/google/auth.ts`). Put `server.state` in the authorize
+  URL: the callback only settles when it comes back with that exact value.
 - API-key providers: serve an `ApiKeyLoopback` form and return its `url` from
   your `connect_provider` tool (weather `mcp/connect.mjs`).
 - On completion, in the same code path: `putSecret({provider, slot, kind,
