@@ -1,5 +1,5 @@
 // Capability kit: the higher-level helpers every capability was copy-pasting.
-// Imported via the "@local/vault/kit" subpath. The core vault stays low-level;
+// Imported via the "local-toy-vault/kit" subpath. The core vault stays low-level;
 // this module makes the conventions executable: the typed result envelope,
 // payload sanitization, and the standalone/brokered/broker-only ladders for
 // profile and commons access.

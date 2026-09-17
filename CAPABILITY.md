@@ -78,7 +78,7 @@ and rejects anything malformed with an indexed error message.
 
 ```js
 import { readFileSync } from "node:fs";
-import { parseCapabilityManifest } from "@local/vault";
+import { parseCapabilityManifest } from "local-toy-vault";
 
 export const MANIFEST = parseCapabilityManifest(
   JSON.parse(readFileSync(new URL("../capability.json", import.meta.url), "utf8")),
@@ -97,7 +97,7 @@ Always build ids with `connectionId()` / `grantId()`; never concatenate by hand.
 
 ## 3. Vault usage
 
-Depend on `@local/vault` via `package.json` (`npm install
+Depend on `local-toy-vault` via `package.json` (`npm install
 github:davidd8/local-vault`), never a relative sibling path. Call `openVault()`
 with no arguments so `VAULT_HOME` and `VAULT_SECRETS_BACKEND` keep working.
 
@@ -163,7 +163,7 @@ Expose the capability as a **stdio** MCP server (`@modelcontextprotocol/sdk`):
   needs no connect flow at all.
 - Optional but encouraged: a `request_capability` gap tool that records what
   users asked for and couldn't have (weather `lib/gaps.mjs`).
-- **Wrap the server in `withCallScope`** (from `@local/vault/kit`) before
+- **Wrap the server in `withCallScope`** (from `local-toy-vault/kit`) before
   registering tools:
 
   ```js
@@ -234,7 +234,7 @@ without storing a secret; the key form is only for optional paid tiers.
 
 ## 7. Standalone rule
 
-A capability must run with only `@local/vault` and its own repo — no gateway,
+A capability must run with only `local-toy-vault` and its own repo — no gateway,
 no sibling capability, no platform service. The
 [capability gateway](https://github.com/davidd8/capability-gateway) is strictly
 additive: it composes capabilities, enforces grants and egress, and audits —
@@ -248,7 +248,7 @@ What an app developer ships, and how users run it.
 
 - **One repo, npm-installable.** `npm install github:you/your-capability` must
   produce a runnable package (use a `prepare` script if you build TypeScript).
-  Depend on `@local/vault` via `package.json` — never a relative sibling path.
+  Depend on `local-toy-vault` via `package.json` — never a relative sibling path.
 - **`capability.json` at the package root** (§1), including `egress` specs
   (§6) for every credentialed provider.
 - **A stdio MCP entrypoint** — a `bin` or a documented
@@ -316,7 +316,7 @@ the agent-facing API and arrive prefixed (`yourapp__<tool>`).
 
 - The capability `id` is forever: grants and audit history are keyed by it.
 - Tool names and result shapes are the public API — additive changes only.
-- Track `@local/vault` minor versions; the barrel at the bottom of this doc is
+- Track `local-toy-vault` minor versions; the barrel at the bottom of this doc is
   the full API you may rely on.
 
 ## 9. Data classes
@@ -387,7 +387,7 @@ Like profile connections, `actions` are **mandatory** — an omitted array
 declares no tools — and an `egress` spec is never attached. Call with the kit:
 
 ```js
-import { peerCall } from "@local/vault/kit";
+import { peerCall } from "local-toy-vault/kit";
 
 const stats = await peerCall("fitness", "get_workout_stats", { days: 7 });
 // stats.ok, stats.data (the producer envelope's data), stats.error?, stats.note?
@@ -466,7 +466,7 @@ A new capability conforms when all of these hold:
       `capability:<producer>` connection; peer unavailability (standalone,
       ungranted, producer unmounted) degrades gracefully, never a crash.
 
-Everything referenced here is exported from the `@local/vault` barrel:
+Everything referenced here is exported from the `local-toy-vault` barrel:
 `openVault`, `connectionId`, `grantId`, `maskSecret`, `parseCapabilityManifest`,
 `grantFromManifest`, `LoopbackServer`, `ApiKeyLoopback`, `egressFromEnv`,
 `brokeredGet`, `brokeredToken`, `brokeredProfile`, `brokeredCommons`,

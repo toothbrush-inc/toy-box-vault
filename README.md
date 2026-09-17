@@ -27,12 +27,12 @@ Pin a tag or commit for reproducible builds:
 npm install github:davidd8/local-vault#<tag-or-sha>
 ```
 
-The package name `@local/vault` is a placeholder scope and may change before
-an npm release. Requires Node 20 or newer.
+The package is `local-toy-vault`; it is not yet on npm. Requires Node 20 or
+newer.
 
 ```js
-import { openVault, LoopbackServer, ApiKeyLoopback } from "@local/vault";
-import { jsonResult, profileContext, commonsDataset } from "@local/vault/kit";
+import { openVault, LoopbackServer, ApiKeyLoopback } from "local-toy-vault";
+import { jsonResult, profileContext, commonsDataset } from "local-toy-vault/kit";
 ```
 
 ## What is in the box
@@ -49,7 +49,7 @@ import { jsonResult, profileContext, commonsDataset } from "@local/vault/kit";
 - **Brokered egress client** — `egressFromEnv`, `brokeredGet`,
   `brokeredToken`, `brokeredProfile`, `brokeredCommons`, `brokeredCall`, used
   when running under the gateway.
-- **`@local/vault/kit`** — the higher-level helpers every capability ended up
+- **`local-toy-vault/kit`** — the higher-level helpers every capability ended up
   needing: the typed result envelope with credential redaction, and the
   standalone-or-brokered ladders for profile, commons data, and peer calls.
 
