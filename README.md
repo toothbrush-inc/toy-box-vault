@@ -1,7 +1,7 @@
-# local-vault
+# toy-box vault
 
-A small local secrets vault for MCP "capabilities": apps that run as a stdio
-MCP server on a user's machine and need credentials for outside services.
+`@dvd-toy-box/vault` is a small local secrets vault for MCP "capabilities": apps
+that run as a stdio MCP server on a user's machine and need credentials for outside services.
 The package holds those credentials in the OS user's data directory or macOS
 Keychain, records which capability may use which connection (grants), and
 ships the two browser-based connect flows (OAuth loopback and an API-key
@@ -69,7 +69,9 @@ Default vault home, overridable with `VAULT_HOME`:
 | Linux | `$XDG_DATA_HOME/local-vault` or `~/.local/share/local-vault` | `secrets.json` |
 | Windows | `%APPDATA%\local-vault` | `secrets.json` |
 
-The home holds `connections.json` (provider, slot, status, scopes: no
+The directory is still named `local-vault`, and the Keychain service is still
+`com.local.vault`, so installs made under the package's old name keep their
+secrets. The home holds `connections.json` (provider, slot, status, scopes: no
 secrets), `grants.json`, `profile.json`, and on the file backend
 `secrets.json`. Force a backend with `VAULT_SECRETS_BACKEND=file` or
 `keychain`.

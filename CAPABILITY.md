@@ -5,7 +5,7 @@ New here? Start with the tutorial — [GUIDE.md](GUIDE.md) — and return to thi
 contract as the reference.
 
 A **capability** is a standalone app that connects to external services through
-the shared vault, declares which connections it needs, and exposes its features
+the shared toy-box vault, declares which connections it needs, and exposes its features
 as a local stdio MCP server with typed results. Connections are the platform's
 system accounts (`google:personal`, `purpleair:default`); grants are per-app
 permissions ("weather may use `purpleair:default`"); the vault stores both. The
