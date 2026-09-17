@@ -40,7 +40,7 @@ access), the user profile is a bounded grant-gated store in this package
 gateway-served read-only dataset directory. What remains hosted is the sync
 machinery below.
 
-Hosted persistence is a separate package from the vault (connections + grants) and
+Hosted persistence is a separate package from toy-box vault (connections + grants) and
 from each capability’s local ledger. One store, three classes of data:
 
 1. **Public data** (commons) — shared datasets anyone may read, nothing personal.

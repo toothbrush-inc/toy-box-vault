@@ -36,7 +36,7 @@ guide explains what each piece is.
   "name": "books", "type": "module", "private": true,
   "scripts": { "mcp": "node mcp/server.mjs" },
   "dependencies": {
-    "@dvd-toy-box/vault": "github:davidd8/local-vault",
+    "@dvd-toy-box/vault": "^0.12.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "zod": "^4.4.3"
   }

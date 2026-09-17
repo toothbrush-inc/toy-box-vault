@@ -2,7 +2,7 @@
   "name": "@dvd-toy-box/vault",
   "version": "0.12.1",
   "private": false,
-  "description": "Local connection vault: secrets, grants, loopback connect, masked status",
+  "description": "toy-box vault: local connection secrets, grants, loopback connect, masked status",
   "author": "Toothbrush, Inc.",
   "type": "module",
   "exports": {
@@ -43,7 +43,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/davidd8/local-vault.git"
+    "url": "git+https://github.com/toothbrush-inc/toy-box-vault.git"
   },
   "license": "MIT"
 }

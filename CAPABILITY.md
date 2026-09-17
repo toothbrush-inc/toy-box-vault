@@ -5,7 +5,7 @@ New here? Start with the tutorial — [GUIDE.md](GUIDE.md) — and return to thi
 contract as the reference.
 
 A **capability** is a standalone app that connects to external services through
-the shared vault, declares which connections it needs, and exposes its features
+the shared toy-box vault, declares which connections it needs, and exposes its features
 as a local stdio MCP server with typed results. Connections are the platform's
 system accounts (`google:personal`, `purpleair:default`); grants are per-app
 permissions ("weather may use `purpleair:default`"); the vault stores both. The
@@ -98,7 +98,8 @@ Always build ids with `connectionId()` / `grantId()`; never concatenate by hand.
 ## 3. Vault usage
 
 Depend on `@dvd-toy-box/vault` via `package.json` (`npm install
-github:davidd8/local-vault`), never a relative sibling path. Call `openVault()`
+@dvd-toy-box/vault`, or `github:toothbrush-inc/toy-box-vault#<sha>` to track
+an unreleased commit), never a relative sibling path. Call `openVault()`
 with no arguments so `VAULT_HOME` and `VAULT_SECRETS_BACKEND` keep working.
 
 **Connect** — the browser gets the secret; tools and chat never do:

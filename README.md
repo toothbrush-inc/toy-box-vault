@@ -1,7 +1,7 @@
-# local-vault
+# toy-box vault
 
-A small local secrets vault for MCP "capabilities": apps that run as a stdio
-MCP server on a user's machine and need credentials for outside services.
+`@dvd-toy-box/vault` is a small local secrets vault for MCP "capabilities": apps
+that run as a stdio MCP server on a user's machine and need credentials for outside services.
 The package holds those credentials in the OS user's data directory or macOS
 Keychain, records which capability may use which connection (grants), and
 ships the two browser-based connect flows (OAuth loopback and an API-key
@@ -15,21 +15,19 @@ and unchanged under the gateway.
 
 ## Install
 
-This package is not published to npm. Install it from GitHub:
-
 ```sh
-npm install github:davidd8/local-vault
+npm install @dvd-toy-box/vault
 ```
 
-Pin a tag or commit for reproducible builds:
+Requires Node 20 or newer. The `@dvd-toy-box` scope is the home for this and
+the other toy-box packages.
+
+To track a commit that is not on npm yet, install from GitHub instead, pinned
+to a tag or commit:
 
 ```sh
-npm install github:davidd8/local-vault#<tag-or-sha>
+npm install github:toothbrush-inc/toy-box-vault#<tag-or-sha>
 ```
-
-The package is `@dvd-toy-box/vault`. It is not on npm yet; the `@dvd-toy-box`
-scope is the home for this and the other toy-box packages. Requires Node 20 or
-newer.
 
 ```js
 import { openVault, LoopbackServer, ApiKeyLoopback } from "@dvd-toy-box/vault";
@@ -69,7 +67,9 @@ Default vault home, overridable with `VAULT_HOME`:
 | Linux | `$XDG_DATA_HOME/local-vault` or `~/.local/share/local-vault` | `secrets.json` |
 | Windows | `%APPDATA%\local-vault` | `secrets.json` |
 
-The home holds `connections.json` (provider, slot, status, scopes: no
+The directory is still named `local-vault`, and the Keychain service is still
+`com.local.vault`, so installs made under the package's old name keep their
+secrets. The home holds `connections.json` (provider, slot, status, scopes: no
 secrets), `grants.json`, `profile.json`, and on the file backend
 `secrets.json`. Force a backend with `VAULT_SECRETS_BACKEND=file` or
 `keychain`.
@@ -139,7 +139,7 @@ trust boundary. There is no sandboxing of capabilities; under the gateway,
 ## Reporting a vulnerability
 
 Please report security issues privately through
-[GitHub Security Advisories](https://github.com/davidd8/local-vault/security/advisories/new)
+[GitHub Security Advisories](https://github.com/toothbrush-inc/toy-box-vault/security/advisories/new)
 rather than a public issue.
 
 ## Related repositories
