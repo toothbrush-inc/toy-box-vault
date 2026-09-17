@@ -161,7 +161,14 @@ async function handleApiKeyRequest(
     return;
   }
 
+  // The state in the advertised URL is what makes the page unguessable. Any
+  // request without it gets a page that carries no state, so a visitor who
+  // only knows the path cannot learn the token and complete the flow.
   if (request.method === "GET" || request.method === "HEAD") {
+    if (!statesEqual(url.searchParams.get("state") ?? "", context.expectedState)) {
+      writeHtml(response, 403, renderExpired(context.page), request.method === "HEAD");
+      return;
+    }
     writeHtml(
       response,
       200,
@@ -182,15 +189,7 @@ async function handleApiKeyRequest(
   const params = new URLSearchParams(body);
   const postedState = params.get("state") ?? url.searchParams.get("state") ?? "";
   if (!statesEqual(postedState, context.expectedState)) {
-    writeHtml(
-      response,
-      403,
-      renderForm(
-        context.page,
-        context.expectedState,
-        "This connect page expired. Ask the app for a new link.",
-      ),
-    );
+    writeHtml(response, 403, renderExpired(context.page));
     return;
   }
 
@@ -274,6 +273,25 @@ function renderForm(page: ApiKeyLoopbackPage, state: string, error?: string): st
     }</div>
   </form>
   <p class="note">The key is stored locally. It is never sent to chat.</p>
+</body>
+</html>`;
+}
+
+/** Shown to a request that did not carry the expected state. Deliberately
+ * form-less: it must never embed the real state. */
+function renderExpired(page: ApiKeyLoopbackPage): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>${escapeHtml(page.title)}</title>
+  <style>
+    body { font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 28rem; margin: 12vh auto; padding: 0 1.25rem; color: #111; }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(page.heading)}</h1>
+  <p>This connect page is unknown or has expired. Ask the app for a new link.</p>
 </body>
 </html>`;
 }

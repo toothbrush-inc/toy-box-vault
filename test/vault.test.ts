@@ -280,6 +280,44 @@ describe("ApiKeyLoopback", () => {
     }
   });
 
+  it("never reveals the state to a request that did not present it", async () => {
+    const server = await ApiKeyLoopback.start({ page, timeoutMs: 5_000, state: "hidden-state" });
+    try {
+      const pending = server.waitForSecret();
+      const origin = server.url.slice(0, server.url.indexOf("/connect"));
+
+      const bare = await fetch(`${origin}/connect`);
+      expect(bare.status).toBe(403);
+      expect(await bare.text()).not.toContain("hidden-state");
+
+      const wrongGet = await fetch(`${origin}/connect?state=guess`);
+      expect(wrongGet.status).toBe(403);
+      expect(await wrongGet.text()).not.toContain("hidden-state");
+
+      const wrongPost = await fetch(`${origin}/connect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "state=guess&api_key=stolen",
+      });
+      expect(wrongPost.status).toBe(403);
+      expect(await wrongPost.text()).not.toContain("hidden-state");
+
+      const real = await fetch(server.url);
+      expect(real.status).toBe(200);
+      expect(await real.text()).toContain('value="hidden-state"');
+
+      const posted = await fetch(server.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "state=hidden-state&api_key=the-real-key",
+      });
+      expect(posted.ok).toBe(true);
+      await expect(pending).resolves.toBe("the-real-key");
+    } finally {
+      server.close();
+    }
+  });
+
   it("advertises a public connect URL carrying the state", async () => {
     const server = await ApiKeyLoopback.start({
       page,
@@ -564,6 +602,26 @@ describe("profile", () => {
       (error: Error) => error,
     );
     expect(denied?.message).toContain("birthday");
+  });
+
+  it("treats an empty actions list as no fields for profile, but all actions for credentials", async () => {
+    const vault = fileVault("explicit");
+    vault.putProfile({ units: "metric", birthday: "1990-01-01" });
+
+    vault.putGrant({ capability: "fitness", connectionId: "profile:default" });
+    await expect(vault.getProfileFor("fitness", ["units"])).rejects.toBeInstanceOf(GrantError);
+    await expect(vault.getProfileFor("fitness", ["birthday"])).rejects.toBeInstanceOf(GrantError);
+    expect(
+      vault.checkGrant({ capability: "fitness", connectionId: "capability:weather", action: "get_forecast" }),
+    ).toBe(false);
+    vault.putGrant({ capability: "fitness", connectionId: "capability:weather" });
+    expect(
+      vault.checkGrant({ capability: "fitness", connectionId: "capability:weather", action: "get_forecast" }),
+    ).toBe(false);
+
+    await vault.putSecret({ provider: "strava", slot: "default", kind: "oauth", secret: "tok" });
+    vault.putGrant({ capability: "fitness", connectionId: "strava:default" });
+    await expect(vault.getSecretFor("fitness", "strava:default", "write")).resolves.toBe("tok");
   });
 
   it("keeps profile data when grants are revoked, and blocks reads in broker mode", async () => {
