@@ -36,7 +36,7 @@ guide explains what each piece is.
   "name": "books", "type": "module", "private": true,
   "scripts": { "mcp": "node mcp/server.mjs" },
   "dependencies": {
-    "local-toy-vault": "github:davidd8/local-vault",
+    "@dvd-toy-box/vault": "github:davidd8/local-vault",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "zod": "^4.4.3"
   }
@@ -49,8 +49,8 @@ guide explains what each piece is.
 import { readFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { parseCapabilityManifest } from "local-toy-vault";
-import { jsonResult, ok } from "local-toy-vault/kit";
+import { parseCapabilityManifest } from "@dvd-toy-box/vault";
+import { jsonResult, ok } from "@dvd-toy-box/vault/kit";
 import { z } from "zod";
 
 parseCapabilityManifest(JSON.parse(readFileSync(new URL("../capability.json", import.meta.url), "utf8")));
@@ -109,7 +109,7 @@ Read it with one kit call — the standalone/brokered/broker-only ladder is
 built in, and it never throws:
 
 ```js
-import { profileContext } from "local-toy-vault/kit";
+import { profileContext } from "@dvd-toy-box/vault/kit";
 
 const profile = await profileContext("books", ["timezone"], {
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -127,7 +127,7 @@ Declare (`"data": { "commons": [{ "dataset": "isbn-catalog" }] }`), then one
 kit call walks broker → `COMMONS_DIR` → your bundled copy and never throws:
 
 ```js
-import { commonsDataset } from "local-toy-vault/kit";
+import { commonsDataset } from "@dvd-toy-box/vault/kit";
 
 const catalog = await commonsDataset("isbn-catalog", {
   bundled: () => JSON.parse(readFileSync(new URL("../data/isbn-catalog.json", import.meta.url), "utf8")),
@@ -150,7 +150,7 @@ Then one kit call — it never throws, and standalone (no gateway) it comes
 back `{ok: false}` so you degrade gracefully:
 
 ```js
-import { peerCall } from "local-toy-vault/kit";
+import { peerCall } from "@dvd-toy-box/vault/kit";
 
 const forecast = await peerCall("weather", "get_forecast", { days: 7 });
 // forecast.ok, forecast.data, forecast.note?  (surface the note when !ok)
@@ -201,7 +201,7 @@ Writing the simple path surfaced what was genuinely too complicated. Status:
    (GitHub template repo; `gh repo create --template`). A working conforming
    capability out of the box.
 2. **Platform helpers for the ladders** — ✅ shipped as the
-   **`local-toy-vault/kit`** subpath: `jsonResult`/`ok`/`fail` (sanitizing
+   **`@dvd-toy-box/vault/kit`** subpath: `jsonResult`/`ok`/`fail` (sanitizing
    result envelope), `profileContext`, `commonsDataset`. Adopting the kit
    removed ~120 lines from the first capability that adopted it, with zero behavior change; the
    three run modes are now invisible to authors.

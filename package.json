@@ -1,5 +1,5 @@
 {
-  "name": "local-toy-vault",
+  "name": "@dvd-toy-box/vault",
   "version": "0.12.0",
   "private": false,
   "description": "Local connection vault: secrets, grants, loopback connect, masked status",
