@@ -95,6 +95,16 @@ export const MANIFEST = parseCapabilityManifest(
 
 Always build ids with `connectionId()` / `grantId()`; never concatenate by hand.
 
+Verified identities (signed-in emails) share one opaque id across the
+platform: `tenantForIdentity(email)` / `identitySlug(email)` →
+`i` + the first 32 hex characters of SHA-256 of the lowercased address.
+calsync uses that as the auto tenant id (and thus broker slot prefix);
+the gateway uses it as the per-user profile directory. Do not invent a
+parallel punctuation slug in an app. Prefer `tenantForIdentity` when
+email→tenant overrides are needed; use `identitySlug` when bare owners
+(no `@`) must also resolve. `legacyTenantSlug` / `legacyUserSlug` exist
+only for migration off the old schemes.
+
 ## 3. Vault usage
 
 Depend on `@dvd-toy-box/vault` via `package.json` (`npm install
@@ -468,7 +478,8 @@ A new capability conforms when all of these hold:
       ungranted, producer unmounted) degrades gracefully, never a crash.
 
 Everything referenced here is exported from the `@dvd-toy-box/vault` barrel:
-`openVault`, `connectionId`, `grantId`, `maskSecret`, `parseCapabilityManifest`,
+`openVault`, `connectionId`, `grantId`, `maskSecret`, `tenantForIdentity`,
+`identitySlug`, `legacyTenantSlug`, `legacyUserSlug`, `parseCapabilityManifest`,
 `grantFromManifest`, `LoopbackServer`, `ApiKeyLoopback`, `egressFromEnv`,
 `brokeredGet`, `brokeredToken`, `brokeredProfile`, `brokeredCommons`,
 `brokeredCall`, `capabilityConnectionId`, `CAPABILITY_PROVIDER`,
