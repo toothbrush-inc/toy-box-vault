@@ -247,7 +247,7 @@ without storing a secret; the key form is only for optional paid tiers.
 
 A capability must run with only `@dvd-toy-box/vault` and its own repo — no gateway,
 no sibling capability, no platform service. The
-[capability gateway](https://github.com/davidd8/capability-gateway) is strictly
+[capability gateway](https://github.com/toothbrush-inc/toy-box-gateway) is strictly
 additive: it composes capabilities, enforces grants and egress, and audits —
 but a capability that *requires* it does not conform.
 

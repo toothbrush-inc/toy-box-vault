@@ -8,7 +8,7 @@ ships the two browser-based connect flows (OAuth loopback and an API-key
 form) that get a secret into the vault without it ever passing through chat.
 
 It is the client-side companion to
-[capability-gateway](https://github.com/davidd8/capability-gateway), which
+[capability-gateway](https://github.com/toothbrush-inc/toy-box-gateway), which
 mounts several capabilities behind one MCP endpoint and enforces grants
 centrally. A capability built on this package works standalone on a laptop
 and unchanged under the gateway.
@@ -144,7 +144,7 @@ rather than a public issue.
 
 ## Related repositories
 
-- [capability-gateway](https://github.com/davidd8/capability-gateway) — one
+- [capability-gateway](https://github.com/toothbrush-inc/toy-box-gateway) — one
   process mounting many capabilities: explicit grants, tool policy, audit log,
   brokered egress.
 - [capability-template](https://github.com/davidd8/capability-template) — a

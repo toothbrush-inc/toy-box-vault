@@ -18,7 +18,7 @@ Not in this repo yet:
 - Install / grant UI (hosted identity + permission screen)
 
 The broker now exists at
-[davidd8/capability-gateway](https://github.com/davidd8/capability-gateway):
+[toothbrush-inc/toy-box-gateway](https://github.com/toothbrush-inc/toy-box-gateway):
 one process mounting capability MCP servers with explicit-mode grants, tool
 policy, an audit log, and **brokered egress** — API keys attached only to
 manifest-allowlisted hosts (weather is fully migrated and never touches its
