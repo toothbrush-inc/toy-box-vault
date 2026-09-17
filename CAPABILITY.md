@@ -102,8 +102,7 @@ calsync uses that as the auto tenant id (and thus broker slot prefix);
 the gateway uses it as the per-user profile directory. Do not invent a
 parallel punctuation slug in an app. Prefer `tenantForIdentity` when
 email→tenant overrides are needed; use `identitySlug` when bare owners
-(no `@`) must also resolve. `legacyTenantSlug` / `legacyUserSlug` exist
-only for migration off the old schemes.
+(no `@`) must also resolve.
 
 ## 3. Vault usage
 
@@ -479,7 +478,7 @@ A new capability conforms when all of these hold:
 
 Everything referenced here is exported from the `@dvd-toy-box/vault` barrel:
 `openVault`, `connectionId`, `grantId`, `maskSecret`, `tenantForIdentity`,
-`identitySlug`, `legacyTenantSlug`, `legacyUserSlug`, `parseCapabilityManifest`,
+`identitySlug`, `parseCapabilityManifest`,
 `grantFromManifest`, `LoopbackServer`, `ApiKeyLoopback`, `egressFromEnv`,
 `brokeredGet`, `brokeredToken`, `brokeredProfile`, `brokeredCommons`,
 `brokeredCall`, `capabilityConnectionId`, `CAPABILITY_PROVIDER`,

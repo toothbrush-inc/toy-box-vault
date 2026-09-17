@@ -34,10 +34,7 @@ export function identitySlug(identity: string): string | null {
  * Tenant a signed-in email lands on: an explicit override, else
  * {@link identitySlug}. Null when the email is empty.
  *
- * Overrides are keyed by lowercased email. Existing deployments that already
- * stored punctuation-slug tenants should keep those people on their old ids
- * via overrides (or rename state and broker slots) until migration completes.
- * Use {@link legacyTenantSlug} to compute the former calsync mapping.
+ * Overrides are keyed by lowercased email.
  */
 export function tenantForIdentity(
   email: string,
@@ -52,36 +49,4 @@ export function tenantForIdentity(
     return override;
   }
   return identitySlug(normalized);
-}
-
-/**
- * Former calsync punctuation-slug tenant (`ana.b@example.com` → `ana-b-example-com`).
- * For migration overrides only.
- */
-export function legacyTenantSlug(email: string): string | null {
-  const normalized = email.trim().toLowerCase();
-  let slug = normalized.replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "");
-  if (slug === "") {
-    return null;
-  }
-  if (!/^[a-z]/u.test(slug)) {
-    slug = `u-${slug}`;
-  }
-  slug = slug.slice(0, 63).replace(/-+$/u, "");
-  return slug === "" ? null : slug;
-}
-
-/**
- * Former gateway profile-dir slug (`owner@example.com` → `owner_at_example_com`).
- * For migration lookups only.
- */
-export function legacyUserSlug(identity: string): string | null {
-  const slug = identity
-    .trim()
-    .toLowerCase()
-    .replace(/@/gu, "_at_")
-    .replace(/[^a-z0-9]+/gu, "_")
-    .replace(/^_+|_+$/gu, "")
-    .slice(0, 96);
-  return slug === "" ? null : slug;
 }

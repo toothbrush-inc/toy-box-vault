@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   identitySlug,
-  legacyTenantSlug,
-  legacyUserSlug,
   tenantForIdentity,
 } from "../src/identity.js";
 
@@ -41,18 +39,5 @@ describe("tenantForIdentity", () => {
     const longer = `${"x".repeat(201)}@example.com`;
     expect(tenantForIdentity(long)).toMatch(/^i[0-9a-f]{32}$/u);
     expect(tenantForIdentity(long)).not.toBe(tenantForIdentity(longer));
-  });
-});
-
-describe("legacy helpers", () => {
-  it("keeps the former calsync hyphen slug", () => {
-    expect(legacyTenantSlug("Ana.B@Example.com")).toBe("ana-b-example-com");
-    expect(legacyTenantSlug("ana-b@example.com")).toBe("ana-b-example-com");
-    expect(legacyTenantSlug("123@example.com")).toBe("u-123-example-com");
-  });
-
-  it("keeps the former gateway underscore slug", () => {
-    expect(legacyUserSlug("owner@example.com")).toBe("owner_at_example_com");
-    expect(legacyUserSlug("a.reader@example.com")).toBe("a_reader_at_example_com");
   });
 });

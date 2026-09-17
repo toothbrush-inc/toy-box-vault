@@ -1,6 +1,6 @@
 {
   "name": "@dvd-toy-box/vault",
-  "version": "0.12.2",
+  "version": "0.13.0",
   "private": false,
   "description": "toy-box vault: local connection secrets, grants, loopback connect, masked status",
   "author": "Toothbrush, Inc.",
