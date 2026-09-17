@@ -132,7 +132,7 @@ describe("kit commonsDataset", () => {
 
 describe("kit peerCall", () => {
   it("degrades gracefully standalone (no broker)", async () => {
-    const result = await peerCall("fitness", "get_workout_stats", {}, {} as NodeJS.ProcessEnv);
+    const result = await peerCall("books", "get_reading_stats", {}, {} as NodeJS.ProcessEnv);
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe("peer_unavailable");
     expect(result.note).toContain("gateway");
@@ -143,40 +143,40 @@ describe("kit peerCall", () => {
       status: 200,
       payload: {
         ok: true,
-        result: { ok: true, data: { total_workouts: 3 } },
-        provenance: { capability: "fitness", version: "0.2.0", ts: "2026-08-20T12:00:00.000Z" },
+        result: { ok: true, data: { total_books: 3 } },
+        provenance: { capability: "books", version: "0.2.0", ts: "2026-08-20T12:00:00.000Z" },
       },
     }));
     const env = { VAULT_EGRESS_URL: url, VAULT_EGRESS_TOKEN: "t" } as NodeJS.ProcessEnv;
-    const result = await peerCall("fitness", "get_workout_stats", { days: 7 }, env);
+    const result = await peerCall("books", "get_reading_stats", { days: 7 }, env);
     expect(result.ok).toBe(true);
-    expect(result.data).toEqual({ total_workouts: 3 });
-    expect(result.provenance?.capability).toBe("fitness");
+    expect(result.data).toEqual({ total_books: 3 });
+    expect(result.provenance?.capability).toBe("books");
     expect(result.provenance?.version).toBe("0.2.0");
   });
 
   it("maps grant denial to an actionable note and passes producer errors through", async () => {
     const denyUrl = await fakeEgress(() => ({
       status: 403,
-      payload: { ok: false, error: { code: "grant_missing", message: "capability:fitness" } },
+      payload: { ok: false, error: { code: "grant_missing", message: "capability:books" } },
     }));
-    const denied = await peerCall("fitness", "get_workout_stats", {}, {
+    const denied = await peerCall("books", "get_reading_stats", {}, {
       VAULT_EGRESS_URL: denyUrl,
       VAULT_EGRESS_TOKEN: "t",
     } as NodeJS.ProcessEnv);
     expect(denied.ok).toBe(false);
     expect(denied.error?.code).toBe("grant_missing");
-    expect(denied.note).toContain("grant capability:fitness");
+    expect(denied.note).toContain("grant capability:books");
 
     const producerFailUrl = await fakeEgress(() => ({
       status: 200,
       payload: {
         ok: true,
         result: { ok: false, error: { code: "unknown_exercise", message: "no such exercise" } },
-        provenance: { capability: "fitness", version: null, ts: "2026-08-20T12:00:00.000Z" },
+        provenance: { capability: "books", version: null, ts: "2026-08-20T12:00:00.000Z" },
       },
     }));
-    const producerFail = await peerCall("fitness", "log_workout", { exercise: "flying" }, {
+    const producerFail = await peerCall("books", "log_book", { exercise: "flying" }, {
       VAULT_EGRESS_URL: producerFailUrl,
       VAULT_EGRESS_TOKEN: "t",
     } as NodeJS.ProcessEnv);
@@ -189,11 +189,11 @@ describe("kit peerCall", () => {
 describe("manifest tools.query", () => {
   it("parses, normalizes, dedupes, and rejects malformed names", () => {
     const manifest = parseCapabilityManifest({
-      id: "fitness",
+      id: "books",
       connections: [],
-      tools: { query: ["get_workout_stats", "Get_Workout_Stats", "get_status"] },
+      tools: { query: ["get_reading_stats", "Get_Reading_Stats", "get_status"] },
     });
-    expect(manifest.tools?.query).toEqual(["get_workout_stats", "get_status"]);
+    expect(manifest.tools?.query).toEqual(["get_reading_stats", "get_status"]);
 
     expect(parseCapabilityManifest({ id: "x", connections: [] }).tools).toBeUndefined();
     expect(() =>

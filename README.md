@@ -148,8 +148,6 @@ rather than a public issue.
   brokered egress.
 - [capability-template](https://github.com/davidd8/capability-template) — a
   working, conforming capability to start from.
-- [fitness-tracker](https://github.com/davidd8/fitness-tracker) — the worked
-  example in the guide.
 - [weather-patterns](https://github.com/davidd8/weather-patterns) — API-key
   providers, hosted connect, profile-aware forecasts.
 - [calsync](https://github.com/davidd8/calsync) — Google OAuth through the

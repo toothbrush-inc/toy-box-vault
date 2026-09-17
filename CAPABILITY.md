@@ -323,13 +323,13 @@ the agent-facing API and arrive prefixed (`yourapp__<tool>`).
 
 Every piece of data a capability touches falls into one of three classes.
 
-**Private data — the capability's own ledgers.** Workout logs, sync mappings,
+**Private data — the capability's own ledgers.** Reading lists, sync mappings,
 collected history. Stored in files the capability names via its **own** env
-vars (convention: `<ID>_DB`, e.g. `FITNESS_DB`, `WEATHER_DB`), defaulting to
+vars (convention: `<ID>_DB`, e.g. `BOOKS_DB`, `WEATHER_DB`), defaulting to
 its working directory. Never read or write another capability's files — other
 capabilities (and the agent) reach this data only through your tools; the
 agent is the join layer across capabilities. Declare ledgers in the manifest's
-optional `data.private` block (`[{ "name": "workouts", "description": "…" }]`)
+optional `data.private` block (`[{ "name": "books", "description": "…" }]`)
 — visibility metadata surfaced by the platform, not an access mechanism.
 
 **User/profile data — tiny shared facts, grant-gated per field.** The platform
@@ -380,7 +380,7 @@ peer as a pseudo-connection whose `actions` enumerate the producer **tools**
 you may invoke:
 
 ```json
-{ "provider": "capability", "slot": "fitness", "optional": true, "actions": ["get_workout_stats"] }
+{ "provider": "capability", "slot": "weather", "optional": true, "actions": ["get_forecast"] }
 ```
 
 Like profile connections, `actions` are **mandatory** — an omitted array
@@ -389,16 +389,16 @@ declares no tools — and an `egress` spec is never attached. Call with the kit:
 ```js
 import { peerCall } from "local-toy-vault/kit";
 
-const stats = await peerCall("fitness", "get_workout_stats", { days: 7 });
-// stats.ok, stats.data (the producer envelope's data), stats.error?, stats.note?
-// stats.provenance? — {capability, version, ts}, stamped by the broker
+const forecast = await peerCall("weather", "get_forecast", { days: 7 });
+// forecast.ok, forecast.data (the producer envelope's data), forecast.error?, forecast.note?
+// forecast.provenance? — {capability, version, ts}, stamped by the broker
 ```
 
 Producers opt into being consumed by annotating their **query tools** — the
 side-effect-free tools safe to call on a read/refresh path:
 
 ```json
-"tools": { "query": ["get_workout_stats", "get_recent_workouts", "get_status"] }
+"tools": { "query": ["get_reading_stats", "get_recent_books", "get_status"] }
 ```
 
 Pinned views bind *only* query tools (a glance must never fire a mutation),
@@ -409,7 +409,7 @@ must never be annotated as a query tool.
 returns `{ok: false, error: {code: "peer_unavailable"}}` — degrade gracefully,
 exactly as with an ungranted profile field. Under the gateway the broker
 verifies the declaration, checks the per-tool grant (users grant
-conversationally: *"grant coach access to fitness stats"* → `gateway_grant`),
+conversationally: *"grant books access to the weather forecast"* → `gateway_grant`),
 enforces the producer-side tool policy, routes to the mounted producer child,
 audits `call:<producer>__<tool>` with both capabilities' versions (never args
 or results), and stamps provenance. Self-calls are denied; a peer that isn't
