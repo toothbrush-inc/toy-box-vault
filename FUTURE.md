@@ -1,7 +1,7 @@
 # Future packages (not this slice)
 
 Slice 5 is the grants **table** and per-app capability **manifests**. These packages
-are deliberately not started here. Keep them out of `@local/vault` until there is a
+are deliberately not started here. Keep them out of `@dvd-toy-box/vault` until there is a
 real broker or a hosted store.
 
 ## Gateway / broker package
@@ -56,7 +56,7 @@ from each capability’s local ledger. One store, three classes of data:
 
 Local OSS keeps writing JSON/SQLite in each app. The hosted store is the swap
 point for those adapters — same tools, different backing files. Do not fold this
-into `@local/vault`; the vault is credentials, not datasets.
+into `@dvd-toy-box/vault`; the vault is credentials, not datasets.
 
 ## Small refactors on hold
 

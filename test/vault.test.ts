@@ -178,6 +178,7 @@ describe("LoopbackServer", () => {
       path: "/oauth2callback",
       successText: "calsync authorization complete. You can close this window.",
       timeoutMs: 5_000,
+      state: "csrf",
     });
     try {
       const pending = server.waitForParams();
@@ -203,7 +204,7 @@ describe("LoopbackServer", () => {
       const pending = server.waitForParams();
       const address = (server as unknown as { server: { address(): { port: number } } }).server.address();
       const response = await fetch(
-        `http://127.0.0.1:${String(address.port)}/oauth2callback/personal?code=pub-code`,
+        `http://127.0.0.1:${String(address.port)}/oauth2callback/personal?code=pub-code&state=${server.state}`,
       );
       expect(response.ok).toBe(true);
       expect((await pending).get("code")).toBe("pub-code");
@@ -231,7 +232,7 @@ describe("LoopbackServer", () => {
       const pending = server.waitForParams();
       const favicon = await fetch(new URL("/favicon.ico", server.redirectUri));
       expect(favicon.status).toBe(404);
-      const response = await fetch(`${server.redirectUri}?code=second`);
+      const response = await fetch(`${server.redirectUri}?code=second&state=${server.state}`);
       expect(response.ok).toBe(true);
       expect((await pending).get("code")).toBe("second");
     } finally {
@@ -275,6 +276,44 @@ describe("ApiKeyLoopback", () => {
       expect(done).toContain("Connected");
       expect(done).not.toContain("super-secret-key");
       await expect(pending).resolves.toBe("super-secret-key");
+    } finally {
+      server.close();
+    }
+  });
+
+  it("never reveals the state to a request that did not present it", async () => {
+    const server = await ApiKeyLoopback.start({ page, timeoutMs: 5_000, state: "hidden-state" });
+    try {
+      const pending = server.waitForSecret();
+      const origin = server.url.slice(0, server.url.indexOf("/connect"));
+
+      const bare = await fetch(`${origin}/connect`);
+      expect(bare.status).toBe(403);
+      expect(await bare.text()).not.toContain("hidden-state");
+
+      const wrongGet = await fetch(`${origin}/connect?state=guess`);
+      expect(wrongGet.status).toBe(403);
+      expect(await wrongGet.text()).not.toContain("hidden-state");
+
+      const wrongPost = await fetch(`${origin}/connect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "state=guess&api_key=stolen",
+      });
+      expect(wrongPost.status).toBe(403);
+      expect(await wrongPost.text()).not.toContain("hidden-state");
+
+      const real = await fetch(server.url);
+      expect(real.status).toBe(200);
+      expect(await real.text()).toContain('value="hidden-state"');
+
+      const posted = await fetch(server.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "state=hidden-state&api_key=the-real-key",
+      });
+      expect(posted.ok).toBe(true);
+      await expect(pending).resolves.toBe("the-real-key");
     } finally {
       server.close();
     }
@@ -520,7 +559,7 @@ describe("parseCapabilityManifest", () => {
 
 describe("profile", () => {
   const PROFILE_MANIFEST = {
-    id: "fitness",
+    id: "books",
     connections: [
       { provider: "profile", slot: "default", optional: true, actions: ["units", "timezone"] },
     ],
@@ -553,17 +592,37 @@ describe("profile", () => {
     vault.putProfile({ units: "metric" });
     const manifest = parseCapabilityManifest(PROFILE_MANIFEST);
 
-    await expect(vault.getProfileFor("fitness", ["units"])).rejects.toBeInstanceOf(GrantError);
+    await expect(vault.getProfileFor("books", ["units"])).rejects.toBeInstanceOf(GrantError);
     vault.putGrant(grantFromManifest(manifest, "profile", "default"));
 
-    await expect(vault.getProfileFor("fitness", ["units", "timezone"])).resolves.toEqual({
+    await expect(vault.getProfileFor("books", ["units", "timezone"])).resolves.toEqual({
       units: "metric", // timezone granted but unset -> omitted
     });
-    const denied = await vault.getProfileFor("fitness", ["birthday"]).then(
+    const denied = await vault.getProfileFor("books", ["birthday"]).then(
       () => null,
       (error: Error) => error,
     );
     expect(denied?.message).toContain("birthday");
+  });
+
+  it("treats an empty actions list as no fields for profile, but all actions for credentials", async () => {
+    const vault = fileVault("explicit");
+    vault.putProfile({ units: "metric", birthday: "1990-01-01" });
+
+    vault.putGrant({ capability: "books", connectionId: "profile:default" });
+    await expect(vault.getProfileFor("books", ["units"])).rejects.toBeInstanceOf(GrantError);
+    await expect(vault.getProfileFor("books", ["birthday"])).rejects.toBeInstanceOf(GrantError);
+    expect(
+      vault.checkGrant({ capability: "books", connectionId: "capability:weather", action: "get_forecast" }),
+    ).toBe(false);
+    vault.putGrant({ capability: "books", connectionId: "capability:weather" });
+    expect(
+      vault.checkGrant({ capability: "books", connectionId: "capability:weather", action: "get_forecast" }),
+    ).toBe(false);
+
+    await vault.putSecret({ provider: "strava", slot: "default", kind: "oauth", secret: "tok" });
+    vault.putGrant({ capability: "books", connectionId: "strava:default" });
+    await expect(vault.getSecretFor("books", "strava:default", "write")).resolves.toBe("tok");
   });
 
   it("keeps profile data when grants are revoked, and blocks reads in broker mode", async () => {
@@ -571,8 +630,8 @@ describe("profile", () => {
     vault.putProfile({ units: "metric" });
     const manifest = parseCapabilityManifest(PROFILE_MANIFEST);
     vault.putGrant(grantFromManifest(manifest, "profile", "default"));
-    vault.revokeGrant("fitness", "profile:default");
-    await expect(vault.getProfileFor("fitness", ["units"])).rejects.toBeInstanceOf(GrantError);
+    vault.revokeGrant("books", "profile:default");
+    await expect(vault.getProfileFor("books", ["units"])).rejects.toBeInstanceOf(GrantError);
     expect(vault.getProfile()).toEqual({ units: "metric" });
 
     const home = mkdtempSync(join(tmpdir(), "vault-"));
@@ -582,21 +641,21 @@ describe("profile", () => {
       backend: "file",
       env: { VAULT_SECRETS_ACCESS: "broker" },
     });
-    await expect(brokered.getProfileFor("fitness", ["units"])).rejects.toThrow(/broker-only/);
+    await expect(brokered.getProfileFor("books", ["units"])).rejects.toThrow(/broker-only/);
     expect(() => brokered.putProfile({ units: "metric" })).not.toThrow();
   });
 
   it("parses the manifest data block and rejects malformed entries", () => {
     const manifest = parseCapabilityManifest({
-      id: "fitness",
+      id: "books",
       connections: [{ provider: "profile", slot: "default", optional: true, actions: ["units"] }],
       data: {
-        private: [{ name: "Workouts", description: "  Personal workout ledger  " }],
+        private: [{ name: "Books", description: "  Personal reading ledger  " }],
         commons: [{ dataset: "exercise-catalog" }],
       },
     });
     expect(manifest.data).toEqual({
-      private: [{ name: "workouts", description: "Personal workout ledger" }],
+      private: [{ name: "books", description: "Personal reading ledger" }],
       commons: [{ dataset: "exercise-catalog" }],
     });
     expect(grantFromManifest(manifest, "profile", "default").actions).toEqual(["units"]);
@@ -741,24 +800,24 @@ describe("brokered egress client", () => {
   });
 
   it("calls peer capabilities via the broker with provenance, coded denials, malformed rejection", async () => {
-    expect(capabilityConnectionId("fitness")).toBe("capability:fitness");
+    expect(capabilityConnectionId("books")).toBe("capability:books");
 
     const ok = await fakeBroker(() => ({
       status: 200,
       payload: {
         ok: true,
         result: { ok: true, data: { total: 3 } },
-        provenance: { capability: "fitness", version: "0.2.0", ts: "2026-08-20T12:00:00.000Z" },
+        provenance: { capability: "books", version: "0.2.0", ts: "2026-08-20T12:00:00.000Z" },
       },
     }));
     try {
       const call = await brokeredCall(
         { url: ok.url, token: "tok" },
-        { capability: "fitness", tool: "get_workout_stats", args: { days: 7 } },
+        { capability: "books", tool: "get_reading_stats", args: { days: 7 } },
       );
       expect(call.result).toEqual({ ok: true, data: { total: 3 } });
       expect(call.provenance).toEqual({
-        capability: "fitness",
+        capability: "books",
         version: "0.2.0",
         ts: "2026-08-20T12:00:00.000Z",
       });
@@ -768,12 +827,12 @@ describe("brokered egress client", () => {
 
     const denied = await fakeBroker(() => ({
       status: 403,
-      payload: { ok: false, error: { code: "grant_missing", message: "capability:fitness" } },
+      payload: { ok: false, error: { code: "grant_missing", message: "capability:books" } },
     }));
     try {
       const denial = await brokeredCall(
         { url: denied.url, token: "tok" },
-        { capability: "fitness", tool: "get_workout_stats" },
+        { capability: "books", tool: "get_reading_stats" },
       ).then(
         () => null,
         (error: Error & { code?: string }) => error,
@@ -787,7 +846,7 @@ describe("brokered egress client", () => {
     try {
       const failure = await brokeredCall(
         { url: malformed.url, token: "tok" },
-        { capability: "fitness", tool: "get_workout_stats" },
+        { capability: "books", tool: "get_reading_stats" },
       ).then(
         () => null,
         (error: Error & { code?: string }) => error,

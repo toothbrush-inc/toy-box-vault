@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
 import { LoopbackError } from "./errors.js";
@@ -19,12 +19,15 @@ export interface LoopbackServerOptions {
   /** When set (e.g. https://gw.example.com), redirectUri advertises `${publicBaseUrl}${path}`. */
   publicBaseUrl?: string;
   /**
-   * The OAuth `state` this authorization was started with. When set, only a
-   * callback carrying exactly this value settles the capture; any other
-   * request to the path is answered 400 and otherwise ignored. Without it the
-   * first request wins — fine on a loopback port, but on a public callback
-   * URL a stranger could abort (or race) a pending authorization.
+   * The OAuth `state` for this authorization. Only a callback carrying exactly
+   * this value settles the capture; any other request to the path is answered
+   * 400 and otherwise ignored. Omit it and the server mints one: read
+   * `server.state` and put it in the authorize URL. A loopback port is not a
+   * safe place to skip this — a web page can scan ephemeral ports and hand the
+   * flow an attacker's code, linking the user to the attacker's account.
    */
+  state?: string;
+  /** @deprecated Alias of `state`. */
   expectedState?: string;
 }
 
@@ -36,6 +39,8 @@ export class LoopbackServer {
     private readonly server: Server,
     readonly redirectUri: string,
     readonly expiresAt: Date,
+    /** The state the callback must carry; include it in the authorize URL. */
+    readonly state: string,
     private readonly captured: Promise<URLSearchParams>,
     private readonly abort: (error: Error) => void,
   ) {}
@@ -63,9 +68,9 @@ export class LoopbackServer {
     });
     void aborted.catch(() => undefined);
 
-    const expectedState = options.expectedState;
+    const state = requireState(options.state ?? options.expectedState);
     const server = createServer((request, response) => {
-      handleLoopbackRequest(request, response, path, successText, resolveCaptured, expectedState);
+      handleLoopbackRequest(request, response, path, successText, resolveCaptured, state);
     });
 
     await new Promise<void>((resolve, reject) => {
@@ -90,6 +95,7 @@ export class LoopbackServer {
       server,
       redirectUri,
       expiresAt,
+      state,
       Promise.race([captured, aborted]),
       settleAbort,
     );
@@ -128,7 +134,7 @@ function handleLoopbackRequest(
   path: string,
   successText: string,
   resolveCaptured: (value: URLSearchParams) => void,
-  expectedState?: string,
+  expectedState: string,
 ): void {
   const url = new URL(request.url ?? "/", "http://127.0.0.1");
   response.setHeader("Content-Type", "text/plain; charset=utf-8");
@@ -148,7 +154,7 @@ function handleLoopbackRequest(
     response.end();
     return;
   }
-  if (expectedState !== undefined && !stateMatches(url.searchParams.get("state"), expectedState)) {
+  if (!stateMatches(url.searchParams.get("state"), expectedState)) {
     response.statusCode = 400;
     response.end("This authorization attempt is unknown or has expired. Start over from the app.");
     return;
@@ -156,6 +162,16 @@ function handleLoopbackRequest(
 
   resolveCaptured(url.searchParams);
   response.end(successText);
+}
+
+function requireState(provided: string | undefined): string {
+  if (provided === undefined) {
+    return randomBytes(24).toString("base64url");
+  }
+  if (provided.trim() === "") {
+    throw new LoopbackError("OAuth state must not be empty");
+  }
+  return provided;
 }
 
 function stateMatches(presented: string | null, expected: string): boolean {

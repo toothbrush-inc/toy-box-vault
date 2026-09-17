@@ -2,8 +2,8 @@
 
 This is the tutorial. [CAPABILITY.md](CAPABILITY.md) is the contract you'll
 eventually conform to; read it after your first tool works, not before. The
-worked example throughout is the
-[fitness-tracker](https://github.com/davidd8/fitness-tracker) capability.
+worked example throughout is a small `books` capability built from the
+[template](https://github.com/davidd8/capability-template).
 
 An app ("capability") here is just a **stdio MCP server that returns typed
 JSON**, plus a small manifest. Everything else — credentials, user profile,
@@ -36,7 +36,7 @@ guide explains what each piece is.
   "name": "books", "type": "module", "private": true,
   "scripts": { "mcp": "node mcp/server.mjs" },
   "dependencies": {
-    "@local/vault": "github:davidd8/local-vault",
+    "@dvd-toy-box/vault": "github:davidd8/local-vault",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "zod": "^4.4.3"
   }
@@ -49,8 +49,8 @@ guide explains what each piece is.
 import { readFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { parseCapabilityManifest } from "@local/vault";
-import { jsonResult, ok } from "@local/vault/kit";
+import { parseCapabilityManifest } from "@dvd-toy-box/vault";
+import { jsonResult, ok } from "@dvd-toy-box/vault/kit";
 import { z } from "zod";
 
 parseCapabilityManifest(JSON.parse(readFileSync(new URL("../capability.json", import.meta.url), "utf8")));
@@ -93,8 +93,8 @@ Declare it for visibility:
 "data": { "private": [{ "name": "books" }] }
 ```
 
-(~20 lines: read array, append, atomic write via tmp+rename. Copy
-`fitness-tracker/lib/db.mjs`.)
+(~20 lines: read array, append, atomic write via tmp+rename. Copy the
+template's `lib/db.mjs`.)
 
 ## Step 4 — profile awareness (the user's units, timezone, …)
 
@@ -109,7 +109,7 @@ Read it with one kit call — the standalone/brokered/broker-only ladder is
 built in, and it never throws:
 
 ```js
-import { profileContext } from "@local/vault/kit";
+import { profileContext } from "@dvd-toy-box/vault/kit";
 
 const profile = await profileContext("books", ["timezone"], {
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -127,7 +127,7 @@ Declare (`"data": { "commons": [{ "dataset": "isbn-catalog" }] }`), then one
 kit call walks broker → `COMMONS_DIR` → your bundled copy and never throws:
 
 ```js
-import { commonsDataset } from "@local/vault/kit";
+import { commonsDataset } from "@dvd-toy-box/vault/kit";
 
 const catalog = await commonsDataset("isbn-catalog", {
   bundled: () => JSON.parse(readFileSync(new URL("../data/isbn-catalog.json", import.meta.url), "utf8")),
@@ -143,21 +143,21 @@ Other apps' data is reachable only through *their* tools, with a grant.
 Declare the producer and the tools you need:
 
 ```json
-"connections": [{ "provider": "capability", "slot": "fitness", "optional": true, "actions": ["get_workout_stats"] }]
+"connections": [{ "provider": "capability", "slot": "weather", "optional": true, "actions": ["get_forecast"] }]
 ```
 
 Then one kit call — it never throws, and standalone (no gateway) it comes
 back `{ok: false}` so you degrade gracefully:
 
 ```js
-import { peerCall } from "@local/vault/kit";
+import { peerCall } from "@dvd-toy-box/vault/kit";
 
-const stats = await peerCall("fitness", "get_workout_stats", { days: 7 });
-// stats.ok, stats.data, stats.note?  (surface the note when !ok)
-// stats.provenance — {capability, version, ts}, stamped by the gateway
+const forecast = await peerCall("weather", "get_forecast", { days: 7 });
+// forecast.ok, forecast.data, forecast.note?  (surface the note when !ok)
+// forecast.provenance — {capability, version, ts}, stamped by the gateway
 ```
 
-The user grants it conversationally: *"grant books access to fitness stats"*
+The user grants it conversationally: *"grant books access to the weather forecast"*
 → `gateway_grant`. Every call is audited with both apps' versions; revoking
 cuts access mid-session.
 
@@ -186,7 +186,7 @@ gateway with `dataDir` configured provisions `<dataDir>/books/` and injects
 
 If your app calls a keyed API, this is where the contract earns its length:
 manifest `egress` specs, `connect_provider`, `getSecretFor`/`brokeredGet`,
-the three run modes. Read CAPABILITY.md §3–§6 and copy weather-compare's
+the three run modes. Read CAPABILITY.md §3–§6 and copy weather-patterns'
 `lib/provider-http.mjs`. Finish with the acceptance checklist (CAPABILITY.md,
 bottom).
 
@@ -201,9 +201,9 @@ Writing the simple path surfaced what was genuinely too complicated. Status:
    (GitHub template repo; `gh repo create --template`). A working conforming
    capability out of the box.
 2. **Platform helpers for the ladders** — ✅ shipped as the
-   **`@local/vault/kit`** subpath: `jsonResult`/`ok`/`fail` (sanitizing
+   **`@dvd-toy-box/vault/kit`** subpath: `jsonResult`/`ok`/`fail` (sanitizing
    result envelope), `profileContext`, `commonsDataset`. Adopting the kit
-   removed ~120 lines from fitness-tracker with zero behavior change; the
+   removed ~120 lines from the first capability that adopted it, with zero behavior change; the
    three run modes are now invisible to authors.
 3. **`gateway_grant` meta tool** — ✅ shipped (plus `gateway_revoke_grant`):
    grants are a conversation, actions default to the manifest's declaration.

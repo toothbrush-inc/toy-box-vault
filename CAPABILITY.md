@@ -78,7 +78,7 @@ and rejects anything malformed with an indexed error message.
 
 ```js
 import { readFileSync } from "node:fs";
-import { parseCapabilityManifest } from "@local/vault";
+import { parseCapabilityManifest } from "@dvd-toy-box/vault";
 
 export const MANIFEST = parseCapabilityManifest(
   JSON.parse(readFileSync(new URL("../capability.json", import.meta.url), "utf8")),
@@ -97,14 +97,15 @@ Always build ids with `connectionId()` / `grantId()`; never concatenate by hand.
 
 ## 3. Vault usage
 
-Depend on `@local/vault` via `package.json` (`npm install
+Depend on `@dvd-toy-box/vault` via `package.json` (`npm install
 github:davidd8/local-vault`), never a relative sibling path. Call `openVault()`
 with no arguments so `VAULT_HOME` and `VAULT_SECRETS_BACKEND` keep working.
 
 **Connect** — the browser gets the secret; tools and chat never do:
 
 - OAuth providers: run the auth-code flow against a `LoopbackServer` redirect
-  (calsync `apps/cli/src/google/auth.ts`).
+  (calsync `apps/cli/src/google/auth.ts`). Put `server.state` in the authorize
+  URL: the callback only settles when it comes back with that exact value.
 - API-key providers: serve an `ApiKeyLoopback` form and return its `url` from
   your `connect_provider` tool (weather `mcp/connect.mjs`).
 - On completion, in the same code path: `putSecret({provider, slot, kind,
@@ -162,7 +163,7 @@ Expose the capability as a **stdio** MCP server (`@modelcontextprotocol/sdk`):
   needs no connect flow at all.
 - Optional but encouraged: a `request_capability` gap tool that records what
   users asked for and couldn't have (weather `lib/gaps.mjs`).
-- **Wrap the server in `withCallScope`** (from `@local/vault/kit`) before
+- **Wrap the server in `withCallScope`** (from `@dvd-toy-box/vault/kit`) before
   registering tools:
 
   ```js
@@ -233,7 +234,7 @@ without storing a secret; the key form is only for optional paid tiers.
 
 ## 7. Standalone rule
 
-A capability must run with only `@local/vault` and its own repo — no gateway,
+A capability must run with only `@dvd-toy-box/vault` and its own repo — no gateway,
 no sibling capability, no platform service. The
 [capability gateway](https://github.com/davidd8/capability-gateway) is strictly
 additive: it composes capabilities, enforces grants and egress, and audits —
@@ -247,7 +248,7 @@ What an app developer ships, and how users run it.
 
 - **One repo, npm-installable.** `npm install github:you/your-capability` must
   produce a runnable package (use a `prepare` script if you build TypeScript).
-  Depend on `@local/vault` via `package.json` — never a relative sibling path.
+  Depend on `@dvd-toy-box/vault` via `package.json` — never a relative sibling path.
 - **`capability.json` at the package root** (§1), including `egress` specs
   (§6) for every credentialed provider.
 - **A stdio MCP entrypoint** — a `bin` or a documented
@@ -315,20 +316,20 @@ the agent-facing API and arrive prefixed (`yourapp__<tool>`).
 
 - The capability `id` is forever: grants and audit history are keyed by it.
 - Tool names and result shapes are the public API — additive changes only.
-- Track `@local/vault` minor versions; the barrel at the bottom of this doc is
+- Track `@dvd-toy-box/vault` minor versions; the barrel at the bottom of this doc is
   the full API you may rely on.
 
 ## 9. Data classes
 
 Every piece of data a capability touches falls into one of three classes.
 
-**Private data — the capability's own ledgers.** Workout logs, sync mappings,
+**Private data — the capability's own ledgers.** Reading lists, sync mappings,
 collected history. Stored in files the capability names via its **own** env
-vars (convention: `<ID>_DB`, e.g. `FITNESS_DB`, `WEATHER_DB`), defaulting to
+vars (convention: `<ID>_DB`, e.g. `BOOKS_DB`, `WEATHER_DB`), defaulting to
 its working directory. Never read or write another capability's files — other
 capabilities (and the agent) reach this data only through your tools; the
 agent is the join layer across capabilities. Declare ledgers in the manifest's
-optional `data.private` block (`[{ "name": "workouts", "description": "…" }]`)
+optional `data.private` block (`[{ "name": "books", "description": "…" }]`)
 — visibility metadata surfaced by the platform, not an access mechanism.
 
 **User/profile data — tiny shared facts, grant-gated per field.** The platform
@@ -379,25 +380,25 @@ peer as a pseudo-connection whose `actions` enumerate the producer **tools**
 you may invoke:
 
 ```json
-{ "provider": "capability", "slot": "fitness", "optional": true, "actions": ["get_workout_stats"] }
+{ "provider": "capability", "slot": "weather", "optional": true, "actions": ["get_forecast"] }
 ```
 
 Like profile connections, `actions` are **mandatory** — an omitted array
 declares no tools — and an `egress` spec is never attached. Call with the kit:
 
 ```js
-import { peerCall } from "@local/vault/kit";
+import { peerCall } from "@dvd-toy-box/vault/kit";
 
-const stats = await peerCall("fitness", "get_workout_stats", { days: 7 });
-// stats.ok, stats.data (the producer envelope's data), stats.error?, stats.note?
-// stats.provenance? — {capability, version, ts}, stamped by the broker
+const forecast = await peerCall("weather", "get_forecast", { days: 7 });
+// forecast.ok, forecast.data (the producer envelope's data), forecast.error?, forecast.note?
+// forecast.provenance? — {capability, version, ts}, stamped by the broker
 ```
 
 Producers opt into being consumed by annotating their **query tools** — the
 side-effect-free tools safe to call on a read/refresh path:
 
 ```json
-"tools": { "query": ["get_workout_stats", "get_recent_workouts", "get_status"] }
+"tools": { "query": ["get_reading_stats", "get_recent_books", "get_status"] }
 ```
 
 Pinned views bind *only* query tools (a glance must never fire a mutation),
@@ -408,7 +409,7 @@ must never be annotated as a query tool.
 returns `{ok: false, error: {code: "peer_unavailable"}}` — degrade gracefully,
 exactly as with an ungranted profile field. Under the gateway the broker
 verifies the declaration, checks the per-tool grant (users grant
-conversationally: *"grant coach access to fitness stats"* → `gateway_grant`),
+conversationally: *"grant books access to the weather forecast"* → `gateway_grant`),
 enforces the producer-side tool policy, routes to the mounted producer child,
 audits `call:<producer>__<tool>` with both capabilities' versions (never args
 or results), and stamps provenance. Self-calls are denied; a peer that isn't
@@ -465,7 +466,7 @@ A new capability conforms when all of these hold:
       `capability:<producer>` connection; peer unavailability (standalone,
       ungranted, producer unmounted) degrades gracefully, never a crash.
 
-Everything referenced here is exported from the `@local/vault` barrel:
+Everything referenced here is exported from the `@dvd-toy-box/vault` barrel:
 `openVault`, `connectionId`, `grantId`, `maskSecret`, `parseCapabilityManifest`,
 `grantFromManifest`, `LoopbackServer`, `ApiKeyLoopback`, `egressFromEnv`,
 `brokeredGet`, `brokeredToken`, `brokeredProfile`, `brokeredCommons`,

@@ -109,7 +109,7 @@ export type SecretsAccess = "direct" | "broker";
 export interface ManifestPrivateData {
   name: string;
   description?: string;
-  /** Env var the capability reads for this ledger's path (e.g. FITNESS_DB). */
+  /** Env var the capability reads for this ledger's path (e.g. WEATHER_DB). */
   env?: string;
   /** Filename within the capability's provisioned data dir; default `<name>.json`. */
   file?: string;

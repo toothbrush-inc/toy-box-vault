@@ -5,9 +5,11 @@ import { EgressRequiredError, GrantError, ProfileBoundsError, VaultError } from 
 import { FileSecretStore, secretsPath } from "./file-secrets.js";
 import { FileGrantStore, grantsPath } from "./grants.js";
 import { resolveVaultHome } from "./home.js";
+import { CAPABILITY_PROVIDER } from "./peer.js";
 import {
   FileProfileStore,
   PROFILE_CONNECTION_ID,
+  PROFILE_PROVIDER,
   PROFILE_MAX_FIELD_LENGTH,
   PROFILE_MAX_FIELDS,
   PROFILE_MAX_FILE_BYTES,
@@ -109,8 +111,14 @@ export class Vault {
     if (record === null) {
       return false;
     }
-    if (input.action === undefined || record.actions.length === 0) {
+    if (input.action === undefined) {
       return true;
+    }
+    if (record.actions.length === 0) {
+      // Credential connections: no actions means every action. Profile and
+      // peer connections enumerate what they expose, so an empty list grants
+      // nothing (CAPABILITY.md §9–10) rather than every field or tool.
+      return !enumeratesActions(record.connectionId);
     }
     return record.actions.includes(input.action);
   }
@@ -270,6 +278,12 @@ export function openVault(options: OpenVaultOptions = {}): Vault {
   const grantMode = options.grantMode ?? grantModeFrom(env);
   const secretsAccess = options.secretsAccess ?? secretsAccessFrom(env);
   return new Vault(home, secrets, connections, grants, profile, grantMode, secretsAccess, options.now);
+}
+
+/** Connections whose `actions` are the whole grant, with no wildcard. */
+function enumeratesActions(connectionIdValue: string): boolean {
+  const provider = connectionIdValue.split(":", 1)[0];
+  return provider === PROFILE_PROVIDER || provider === CAPABILITY_PROVIDER;
 }
 
 function requireProfileField(value: string): string {
